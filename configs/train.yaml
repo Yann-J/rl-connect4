@@ -1,4 +1,4 @@
-run_name: "connect4_maskableppo_v1"
+run_name: "connect4_maskableppo_v2"
 
 env:
   symmetry_augmentation: true

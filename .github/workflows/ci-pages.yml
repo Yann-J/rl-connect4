@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
@@ -18,29 +18,47 @@ concurrency:
 
 jobs:
   train-and-export:
+    if: "${{ github.event_name != 'push' || !contains(github.event.head_commit.message, 'ci: update trained policy artifact') }}"
     # Use AWS GPUs provisioned by RunsOn
     # runs-on: "runs-on=${{ github.run_id }}/family=g4dn.xlarge/image=ubuntu24-gpu-x64"
     runs-on: "ubuntu-latest"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect training-related changes
+        id: changes
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            training:
+              - "src/**"
+              - "config/**"
+              - "configs/**"
+              - "scripts/**"
 
       - name: Set up Python
+        if: github.event_name == 'workflow_dispatch' || steps.changes.outputs.training == 'true'
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: "pip"
 
       - name: Install dependencies
+        if: github.event_name == 'workflow_dispatch' || steps.changes.outputs.training == 'true'
         run: pip install -e .
 
       - name: Startup checks
+        if: github.event_name == 'workflow_dispatch' || steps.changes.outputs.training == 'true'
         run: |
           nvidia-smi || true
           python --version
           pip --version
 
       - name: Start TensorBoard server
+        if: github.event_name == 'workflow_dispatch' || steps.changes.outputs.training == 'true'
         run: |
           set -euo pipefail
           mkdir -p /tmp/ci-tensorboard
@@ -48,6 +66,7 @@ jobs:
           echo "$!" > /tmp/ci-tensorboard/tensorboard.pid
 
       - name: Install cloudflared
+        if: github.event_name == 'workflow_dispatch' || steps.changes.outputs.training == 'true'
         run: |
           set -euo pipefail
           curl -L "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64" -o /tmp/cloudflared
@@ -55,6 +74,7 @@ jobs:
           sudo mv /tmp/cloudflared /usr/local/bin/cloudflared
 
       - name: Expose live TensorBoard URL
+        if: github.event_name == 'workflow_dispatch' || steps.changes.outputs.training == 'true'
         run: |
           set -euo pipefail
           cloudflared tunnel --url http://localhost:6006 --no-autoupdate > /tmp/ci-tensorboard/tunnel.log 2>&1 &
@@ -70,16 +90,18 @@ jobs:
           echo "${URL}" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Run training with provided config
+        if: github.event_name == 'workflow_dispatch' || steps.changes.outputs.training == 'true'
         run: python scripts/train.py --config configs/train.yaml
 
       - name: Cleanup TensorBoard tunnel
-        if: always()
+        if: always() && (github.event_name == 'workflow_dispatch' || steps.changes.outputs.training == 'true')
         run: |
           kill "$(cat /tmp/ci-tensorboard/tunnel.pid)" 2>/dev/null || true
           kill "$(cat /tmp/ci-tensorboard/tensorboard.pid)" 2>/dev/null || true
 
       - name: Detect run directory
         id: run_dir
+        if: github.event_name == 'workflow_dispatch' || steps.changes.outputs.training == 'true'
         run: |
           set -euo pipefail
           RUN_DIR="$(ls -1d checkpoints/*/ | head -n 1)"
@@ -92,13 +114,29 @@ jobs:
           echo "run_name=${RUN_NAME}" >> "$GITHUB_OUTPUT"
 
       - name: Export ONNX model for web app
+        if: github.event_name == 'workflow_dispatch' || steps.changes.outputs.training == 'true'
         run: >
           python scripts/export_policy_onnx.py --model checkpoints/${{
           steps.run_dir.outputs.run_name }}/final_model.zip --output
           web/policy.onnx
 
       - name: Build static TensorBoard report
+        if: github.event_name == 'workflow_dispatch' || steps.changes.outputs.training == 'true'
         run: python scripts/build_tensorboard_report.py
+
+      - name: Commit updated model artifact
+        if: (github.event_name == 'workflow_dispatch' || steps.changes.outputs.training == 'true') && github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- web/policy.onnx; then
+            echo "No model artifact update to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add web/policy.onnx
+          git commit -m "ci: update trained policy artifact [skip ci]"
+          git push origin HEAD:main
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

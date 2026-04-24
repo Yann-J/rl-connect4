@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rl-connect4"
+version = "0.1.0"
+description = "Self-play RL training stack for Connect-4 with PettingZoo and Stable-Baselines3."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "numpy>=1.24",
+  "gymnasium>=0.29",
+  "pettingzoo>=1.24",
+  "pygame-ce>=2.5",
+  "stable-baselines3>=2.3",
+  "sb3-contrib>=2.3",
+  "torch>=2.1",
+  "onnx>=1.16",
+  "tensorboard>=2.14",
+  "PyYAML>=6.0.1",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+  "ruff>=0.6",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

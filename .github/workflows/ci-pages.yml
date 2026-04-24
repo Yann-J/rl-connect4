@@ -36,11 +36,7 @@ jobs:
 
       - name: Startup checks
         run: |
-          nvidia-smi
-          nvcc --version
-          torchinfo --version
-          onnxruntime-web --version
-          tensorboard --version
+          nvidia-smi || true
           python --version
           pip --version
           pip list

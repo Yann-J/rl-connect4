@@ -22,6 +22,7 @@ src/rl_connect4/training/league.py
 src/rl_connect4/training/opponent_pool.py
 tests/test_env_masking.py
 tests/test_env_symmetry.py
+tests/test_mcts.py
 tests/test_opponent_pool.py
 tests/test_reward_terminal.py
 tests/test_rule_based_policy.py

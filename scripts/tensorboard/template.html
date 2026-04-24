@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>TensorBoard Static Report</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 24px; background: #0b1020; color: #e6e8ef; }
+      h1, h2 { margin: 0 0 12px; }
+      .run { margin: 24px 0 40px; }
+      .chart { background: #121a33; border: 1px solid #273055; border-radius: 8px; padding: 12px; margin: 14px 0; }
+      canvas { width: 100% !important; max-height: 340px; }
+    </style>
+  </head>
+  <body>
+    <h1>TensorBoard Static Report</h1>
+    <p>Generated from <code>runs/</code> during CI.</p>
+    <div id="root"></div>
+    <script>
+      const runs = __RUNS_DATA__;
+      const root = document.getElementById("root");
+      for (const [runName, tags] of Object.entries(runs)) {
+        const section = document.createElement("section");
+        section.className = "run";
+        const title = document.createElement("h2");
+        title.textContent = runName;
+        section.appendChild(title);
+        for (const [tag, points] of Object.entries(tags)) {
+          const wrapper = document.createElement("div");
+          wrapper.className = "chart";
+          const heading = document.createElement("div");
+          heading.textContent = tag;
+          wrapper.appendChild(heading);
+          const canvas = document.createElement("canvas");
+          wrapper.appendChild(canvas);
+          section.appendChild(wrapper);
+          new Chart(canvas.getContext("2d"), {
+            type: "line",
+            data: {
+              datasets: [{
+                label: tag,
+                data: points.map(p => ({x: p.step, y: p.value})),
+                borderColor: "#6ea8fe",
+                pointRadius: 0,
+                tension: 0.15,
+              }],
+            },
+            options: {
+              parsing: false,
+              scales: {
+                x: { type: "linear", title: { display: true, text: "step" } },
+                y: { title: { display: true, text: "value" } },
+              },
+              plugins: { legend: { display: true } },
+            },
+          });
+        }
+        root.appendChild(section);
+      }
+      if (!Object.keys(runs).length) {
+        root.textContent = "No TensorBoard runs found.";
+      }
+    </script>
+  </body>
+</html>

@@ -18,7 +18,8 @@ concurrency:
 
 jobs:
   train-and-export:
-    runs-on: ubuntu-latest
+    # Use AWS GPUs provisioned by RunsOn
+    runs-on: "runs-on=${{ github.run_id }}/family=g4dn.xlarge/image=ubuntu24-gpu-x64"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -32,8 +33,56 @@ jobs:
       - name: Install dependencies
         run: pip install -e .
 
+      - name: Startup checks
+        run: |
+          nvidia-smi
+          nvcc --version
+          torchinfo --version
+          onnxruntime-web --version
+          tensorboard --version
+          python --version
+          pip --version
+          pip list
+          pip freeze
+          pip show onnxruntime-web
+
+      - name: Start TensorBoard server
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/ci-tensorboard
+          tensorboard --logdir runs --host 0.0.0.0 --port 6006 > /tmp/ci-tensorboard/tensorboard.log 2>&1 &
+          echo "$!" > /tmp/ci-tensorboard/tensorboard.pid
+
+      - name: Install cloudflared
+        run: |
+          set -euo pipefail
+          curl -L "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64" -o /tmp/cloudflared
+          chmod +x /tmp/cloudflared
+          sudo mv /tmp/cloudflared /usr/local/bin/cloudflared
+
+      - name: Expose live TensorBoard URL
+        run: |
+          set -euo pipefail
+          cloudflared tunnel --url http://localhost:6006 --no-autoupdate > /tmp/ci-tensorboard/tunnel.log 2>&1 &
+          echo "$!" > /tmp/ci-tensorboard/tunnel.pid
+          sleep 8
+          URL="$(rg -o "https://[-a-zA-Z0-9]+\\.trycloudflare\\.com" /tmp/ci-tensorboard/tunnel.log -m 1 || true)"
+          if [ -z "${URL}" ]; then
+            echo "Failed to discover Cloudflare tunnel URL."
+            exit 1
+          fi
+          echo "TensorBoard URL: ${URL}"
+          echo "### Live TensorBoard" >> "$GITHUB_STEP_SUMMARY"
+          echo "${URL}" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Run training with provided config
         run: python scripts/train_self_play.py --config configs/train_self_play.yaml
+
+      - name: Cleanup TensorBoard tunnel
+        if: always()
+        run: |
+          kill "$(cat /tmp/ci-tensorboard/tunnel.pid)" 2>/dev/null || true
+          kill "$(cat /tmp/ci-tensorboard/tensorboard.pid)" 2>/dev/null || true
 
       - name: Detect run directory
         id: run_dir
@@ -50,9 +99,9 @@ jobs:
 
       - name: Export ONNX model for web app
         run: >
-          python scripts/export_policy_onnx.py
-          --model checkpoints/${{ steps.run_dir.outputs.run_name }}/final_model.zip
-          --output web/policy.onnx
+          python scripts/export_policy_onnx.py --model checkpoints/${{
+          steps.run_dir.outputs.run_name }}/final_model.zip --output
+          web/policy.onnx
 
       - name: Build static TensorBoard report
         run: |

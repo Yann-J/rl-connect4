@@ -14,8 +14,11 @@ class MaskablePolicyOnnxWrapper(th.nn.Module):
         self.policy = policy
 
     def forward(self, obs: th.Tensor, action_masks: th.Tensor) -> th.Tensor:
-        dist = self.policy.get_distribution(obs, action_masks=action_masks.bool())
-        return dist.distribution.logits
+        # Bypass MaskableCategorical construction to keep torch.export compatible.
+        features = self.policy.extract_features(obs, self.policy.pi_features_extractor)
+        latent_pi = self.policy.mlp_extractor.forward_actor(features)
+        logits = self.policy.action_net(latent_pi)
+        return logits.masked_fill(~action_masks.bool(), -1e8)
 
 
 def parse_args() -> argparse.Namespace:
@@ -38,7 +41,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--opset",
-        default=17,
+        default=18,
         type=int,
         help="ONNX opset version.",
     )
@@ -71,21 +74,22 @@ def main() -> None:
 
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    batch = th.export.Dim("batch")
 
     th.onnx.export(
         wrapper,
         (obs_sample, mask_sample),
         str(output_path),
-        dynamo=False,
+        dynamo=True,
+        external_data=False,
         export_params=True,
         opset_version=args.opset,
         do_constant_folding=True,
         input_names=["obs", "action_masks"],
         output_names=["logits"],
-        dynamic_axes={
-            "obs": {0: "batch"},
-            "action_masks": {0: "batch"},
-            "logits": {0: "batch"},
+        dynamic_shapes={
+            "obs": {0: batch},
+            "action_masks": {0: batch},
         },
     )
     print(f"ONNX model exported to {output_path}")

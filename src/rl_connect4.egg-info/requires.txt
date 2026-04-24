@@ -5,6 +5,7 @@ pygame-ce>=2.5
 stable-baselines3>=2.3
 sb3-contrib>=2.3
 torch>=2.1
+onnx>=1.16
 tensorboard>=2.14
 PyYAML>=6.0.1
 

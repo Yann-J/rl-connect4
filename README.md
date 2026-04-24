@@ -14,7 +14,7 @@ This was developed from scratch but heavily inspired from the following referenc
 
 - [PettingZoo](https://pettingzoo.farama.org/index.html) play environment (`connect_four_v3`)
 - [Stable-Baselines3](https://stable-baselines3.readthedocs.io/en/master/) + sb3-contrib `MaskablePPO` RL framework
-- PPO with legal-action masking policy
+- PPO algorithm with legal-action masking policy
 - ML model using:
   - Residual CNN feature extractor (stack of 3x3 conv blocks)
   - Policy/value MLP heads on top of extracted features
@@ -26,6 +26,7 @@ This was developed from scratch but heavily inspired from the following referenc
 A lot of experimentation was done on opponent selection for self-play training (because just running the policy against itself could reward the policy for getting a better player, but also for being a worse opponent):
 
 - We are using a mix of random opponents with varied policies:
+  - The current policy (pure self-play)
   - Some previous policy checkpoint
   - A random play policy
   - Monte-Carlo Tree Search policy (playing N random games and picking best action from the simulation)
@@ -39,7 +40,7 @@ A lot of experimentation was done on opponent selection for self-play training (
 python -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
-python scripts/train_self_play.py --config configs/train_self_play.yaml
+python scripts/train.py --config configs/train.yaml
 ```
 
 ## TensorBoard
@@ -62,6 +63,10 @@ Then serve the `web/` folder with any static file server:
 
 ```bash
 python -m http.server 8000 --directory web
+```
+
+```bash
+npx serve -p 8000 web
 ```
 
 Open `http://127.0.0.1:8000` and play directly in the browser (inference runs

@@ -59,7 +59,7 @@ A lot of experimentation was done on opponent selection for self-play training (
 python -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
-python scripts/train_self_play.py --config configs/train_self_play.yaml
+python scripts/train.py --config configs/train.yaml
 ```
 
 ## TensorBoard

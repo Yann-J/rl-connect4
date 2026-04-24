@@ -76,7 +76,7 @@ jobs:
           echo "${URL}" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Run training with provided config
-        run: python scripts/train_self_play.py --config configs/train_self_play.yaml
+        run: python scripts/train.py --config configs/train.yaml
 
       - name: Cleanup TensorBoard tunnel
         if: always()

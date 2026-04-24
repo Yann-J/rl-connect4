@@ -86,7 +86,7 @@ def main() -> None:
     parser.add_argument(
         "--config",
         type=str,
-        default="configs/train_self_play.yaml",
+        default="configs/train.yaml",
     )
     args = parser.parse_args()
 

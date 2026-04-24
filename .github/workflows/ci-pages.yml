@@ -60,7 +60,7 @@ jobs:
           cloudflared tunnel --url http://localhost:6006 --no-autoupdate > /tmp/ci-tensorboard/tunnel.log 2>&1 &
           echo "$!" > /tmp/ci-tensorboard/tunnel.pid
           sleep 8
-          URL="$(rg -o "https://[-a-zA-Z0-9]+\\.trycloudflare\\.com" /tmp/ci-tensorboard/tunnel.log -m 1 || true)"
+          URL="$(sed -nE 's/.*(https:\/\/[-a-zA-Z0-9]+\.trycloudflare\.com).*/\1/p' /tmp/ci-tensorboard/tunnel.log | head -n 1 || true)"
           if [ -z "${URL}" ]; then
             echo "Failed to discover Cloudflare tunnel URL."
             exit 1

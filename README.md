@@ -16,8 +16,8 @@ This was developed from scratch but heavily inspired from the following referenc
 - [Stable-Baselines3](https://stable-baselines3.readthedocs.io/en/master/) + sb3-contrib `MaskablePPO` RL framework
 - PPO with legal-action masking policy
 - ML model using:
-  - 2 CNN (because Connect-4 has strong geometric patterns based on neighbors)
-  - 1 fully-connected linear output layer
+  - Residual CNN feature extractor (stack of 3x3 conv blocks)
+  - Policy/value MLP heads on top of extracted features
 - Simple sparse rewards (`-1/0/+1`), since games are quite short/finite
 - TensorBoard metrics for reward and win-rate baselines
 

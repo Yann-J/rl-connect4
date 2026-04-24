@@ -31,13 +31,21 @@ def _winner(board: np.ndarray) -> int:
             token = board[r, c]
             if token == 0:
                 continue
-            if c + 3 < cols and all(board[r, c + i] == token for i in range(4)):
+            if c + 3 < cols and all(
+                board[r, c + i] == token for i in range(4)
+            ):
                 return token
-            if r + 3 < rows and all(board[r + i, c] == token for i in range(4)):
+            if r + 3 < rows and all(
+                board[r + i, c] == token for i in range(4)
+            ):
                 return token
-            if r + 3 < rows and c + 3 < cols and all(board[r + i, c + i] == token for i in range(4)):
+            if r + 3 < rows and c + 3 < cols and all(
+                board[r + i, c + i] == token for i in range(4)
+            ):
                 return token
-            if r + 3 < rows and c - 3 >= 0 and all(board[r + i, c - i] == token for i in range(4)):
+            if r + 3 < rows and c - 3 >= 0 and all(
+                board[r + i, c - i] == token for i in range(4)
+            ):
                 return token
     return 0
 
@@ -51,16 +59,71 @@ def _is_terminal(board: np.ndarray) -> tuple[bool, float]:
     return False, 0.0
 
 
-def _rollout(board: np.ndarray, player: int) -> float:
-    cur_board = board.copy()
-    cur_player = player
-    while True:
-        terminal, value = _is_terminal(cur_board)
-        if terminal:
-            return value
-        action = int(np.random.choice(_legal_actions(cur_board)))
-        cur_board = _drop(cur_board, action, cur_player)
-        cur_player = -cur_player
+def _center_bias(action: int) -> float:
+    # Favor center columns, usually stronger in Connect-4.
+    return 3.0 - abs(action - 3)
+
+
+def _score_windows(board: np.ndarray, player: int) -> float:
+    score = 0.0
+    rows, cols = board.shape
+    directions = ((0, 1), (1, 0), (1, 1), (1, -1))
+    for r in range(rows):
+        for c in range(cols):
+            for dr, dc in directions:
+                r_end = r + 3 * dr
+                c_end = c + 3 * dc
+                if not (0 <= r_end < rows and 0 <= c_end < cols):
+                    continue
+                window = np.array(
+                    [board[r + i * dr, c + i * dc] for i in range(4)]
+                )
+                own = int(np.count_nonzero(window == player))
+                opp = int(np.count_nonzero(window == -player))
+                empty = int(np.count_nonzero(window == 0))
+                if own > 0 and opp > 0:
+                    continue
+                if own == 3 and empty == 1:
+                    score += 8.0
+                elif own == 2 and empty == 2:
+                    score += 2.0
+                elif own == 1 and empty == 3:
+                    score += 0.25
+                if opp == 3 and empty == 1:
+                    score -= 9.0
+                elif opp == 2 and empty == 2:
+                    score -= 2.5
+    return score
+
+
+def _evaluate(board: np.ndarray, to_play: int) -> float:
+    winner = _winner(board)
+    if winner != 0:
+        return 1.0 if winner == to_play else -1.0
+    if _legal_actions(board).size == 0:
+        return 0.0
+
+    center = np.array(board[:, 3])
+    center_own = int(np.count_nonzero(center == to_play))
+    center_opp = int(np.count_nonzero(center == -to_play))
+    center_score = 0.2 * (center_own - center_opp)
+    pattern_score = _score_windows(board, to_play) / 30.0
+    value = center_score + pattern_score
+    return float(np.clip(value, -0.99, 0.99))
+
+
+def _best_tactical_action(
+    board: np.ndarray, legal_actions: np.ndarray
+) -> int | None:
+    for action in legal_actions:
+        a = int(action)
+        if _winner(_drop(board, a, 1)) == 1:
+            return a
+    for action in legal_actions:
+        a = int(action)
+        if _winner(_drop(board, a, -1)) == -1:
+            return a
+    return None
 
 
 @dataclass
@@ -80,7 +143,9 @@ class Node:
     def ucb(self, c: float = 1.4) -> float:
         if self.visits == 0 or self.parent is None:
             return float("inf")
-        return self.value + c * math.sqrt(math.log(self.parent.visits) / self.visits)
+        return self.value + c * math.sqrt(
+            math.log(self.parent.visits) / self.visits
+        )
 
     def expand(self) -> None:
         for action in _legal_actions(self.board):
@@ -94,12 +159,17 @@ class Node:
                 )
 
 
-def mcts_action(obs: np.ndarray, action_mask: np.ndarray, simulations: int = 100) -> int:
+def mcts_action(
+    obs: np.ndarray, action_mask: np.ndarray, simulations: int = 100
+) -> int:
     board = _obs_to_board(obs)
     root = Node(board=board, player=1)
     legal = np.flatnonzero(action_mask)
     if legal.size == 1:
         return int(legal[0])
+    tactical = _best_tactical_action(board, legal)
+    if tactical is not None:
+        return tactical
 
     root.expand()
     for _ in range(simulations):
@@ -111,7 +181,7 @@ def mcts_action(obs: np.ndarray, action_mask: np.ndarray, simulations: int = 100
             node.expand()
             if node.children:
                 node = np.random.choice(list(node.children.values()))
-            value = _rollout(node.board, node.player)
+            value = _evaluate(node.board, node.player)
         # Backprop: value is from player_1 perspective.
         cur = node
         while cur is not None:
@@ -119,7 +189,14 @@ def mcts_action(obs: np.ndarray, action_mask: np.ndarray, simulations: int = 100
             cur.value_sum += value * cur.player
             cur = cur.parent
 
-    best = max(root.children.values(), key=lambda n: n.visits)
+    best = max(
+        root.children.values(),
+        key=lambda n: (
+            n.visits,
+            n.value,
+            _center_bias(int(n.action if n.action is not None else 3)),
+        ),
+    )
     return int(best.action)
 
 

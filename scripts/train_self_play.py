@@ -1,12 +1,17 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 
 import yaml
 from sb3_contrib import MaskablePPO
 from sb3_contrib.common.wrappers import ActionMasker
 from stable_baselines3.common.vec_env import DummyVecEnv
+
+src_dir = Path(__file__).resolve().parents[1] / "src"
+if str(src_dir) not in sys.path:
+    sys.path.insert(0, str(src_dir))
 
 from rl_connect4.envs.pettingzoo_connect4 import (
     Connect4Config,
@@ -27,30 +32,42 @@ def load_config(path: str | Path) -> dict:
         return yaml.safe_load(f)
 
 
-def make_env(pool: OpponentPool, env_cfg: dict):
+def make_env(pool: OpponentPool, env_cfg: dict, rank: int = 0):
     def _factory():
         config = Connect4Config(
-            symmetry_augmentation=bool(
-                env_cfg.get("symmetry_augmentation", False)
-            )
+            symmetry_augmentation=bool(env_cfg.get("symmetry_augmentation", False))
         )
         env = PettingZooConnect4GymEnv(
             opponent_sampler=pool.sample,
             config=config,
         )
+        env.reset(seed=1000 + rank)
         return ActionMasker(env, lambda e: e.action_masks())
 
     return _factory
 
 
-def parse_curriculum(self_play_cfg: dict) -> list[CurriculumPhase]:
+def parse_curriculum(
+    self_play_cfg: dict, total_timesteps: int
+) -> list[CurriculumPhase]:
     phases = self_play_cfg.get("phases", [])
     parsed: list[CurriculumPhase] = []
     for phase in phases:
         mix_cfg = phase["mix"]
+        if "start_percent" in phase:
+            start_percent = float(phase["start_percent"])
+            if not 0.0 <= start_percent <= 100.0:
+                raise ValueError("phase.start_percent must be in [0, 100]")
+            start_timestep = int(total_timesteps * (start_percent / 100.0))
+        elif "start_timestep" in phase:
+            start_timestep = int(phase["start_timestep"])
+        else:
+            raise KeyError(
+                "Each phase must define either start_percent or start_timestep"
+            )
         parsed.append(
             CurriculumPhase(
-                start_timestep=int(phase["start_timestep"]),
+                start_timestep=start_timestep,
                 mix=OpponentMix(
                     current=float(mix_cfg["current"]),
                     historical=float(mix_cfg["historical"]),
@@ -80,6 +97,7 @@ def main() -> None:
     self_play_cfg = cfg["self_play"]
     env_cfg = cfg.get("env", {})
     league_cfg = cfg.get("league", {})
+    n_envs = int(train_cfg.get("num_envs", 1))
 
     opponent_pool = OpponentPool(
         OpponentMix(
@@ -94,12 +112,18 @@ def main() -> None:
         ),
     )
 
-    env = DummyVecEnv([make_env(opponent_pool, env_cfg)])
+    env = DummyVecEnv([make_env(opponent_pool, env_cfg, rank=i) for i in range(n_envs)])
 
     policy_kwargs = {
         "features_extractor_class": Connect4CNNExtractor,
         "features_extractor_kwargs": {
-            "features_dim": int(train_cfg["features_dim"])
+            "features_dim": int(train_cfg["features_dim"]),
+            "channels": int(train_cfg.get("cnn_channels", 64)),
+            "num_res_blocks": int(train_cfg.get("cnn_res_blocks", 6)),
+        },
+        "net_arch": {
+            "pi": [256, 128],
+            "vf": [256, 128],
         },
     }
     model = MaskablePPO(
@@ -127,7 +151,9 @@ def main() -> None:
         checkpoint_freq=int(self_play_cfg["checkpoint_freq"]),
         n_eval_episodes=int(eval_cfg["n_eval_episodes"]),
         mcts_simulations=int(eval_cfg["mcts_simulations"]),
-        curriculum=parse_curriculum(self_play_cfg),
+        curriculum=parse_curriculum(
+            self_play_cfg, total_timesteps=int(train_cfg["total_timesteps"])
+        ),
         league_config=LeagueConfig(
             n_games_per_pair=int(league_cfg.get("n_games_per_pair", 5)),
             max_policies=int(league_cfg.get("max_policies", 10)),

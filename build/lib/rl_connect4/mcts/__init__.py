@@ -1,2 +1,0 @@
-"""MCTS baseline opponent."""
-

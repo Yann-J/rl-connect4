@@ -23,6 +23,7 @@ class Connect4Config:
     train_agent: str = "player_0"
     render_mode: str | None = None
     symmetry_augmentation: bool = False
+    randomize_train_agent: bool = False
 
 
 class PettingZooConnect4GymEnv(gym.Env[np.ndarray, int]):
@@ -42,6 +43,7 @@ class PettingZooConnect4GymEnv(gym.Env[np.ndarray, int]):
         self.opponent_sampler = opponent_sampler
         self.env = connect_four_v3.env(render_mode=self.config.render_mode)
         self._mirror_episode = False
+        self._train_agent = self.config.train_agent
 
         self.action_space = spaces.Discrete(7)
         # 2 channels x 6 rows x 7 columns
@@ -85,20 +87,26 @@ class PettingZooConnect4GymEnv(gym.Env[np.ndarray, int]):
     def _advance_until_train_turn(self) -> None:
         while (
             not self._is_done()
-            and self.env.agent_selection != self.config.train_agent
+            and self.env.agent_selection != self._train_agent
         ):
             agent = self.env.agent_selection
             raw_obs = self._raw_obs(agent)
             action_mask = self._action_mask(raw_obs)
-            action = self.opponent_policy(self._format_obs(raw_obs), action_mask)
+            action = self.opponent_policy(
+                self._format_obs(raw_obs), action_mask
+            )
             if action_mask[action] == 0:
                 action = int(np.flatnonzero(action_mask)[0])
             self.env.step(self._to_env_action(action))
 
     def _current_info(self) -> dict:
         if self._is_done():
-            return {"action_mask": np.zeros(self.action_space.n, dtype=np.int8)}
-        raw_obs = self._raw_obs(self.config.train_agent)
+            return {
+                "action_mask": np.zeros(
+                    self.action_space.n, dtype=np.int8
+                )
+            }
+        raw_obs = self._raw_obs(self._train_agent)
         return {"action_mask": self._action_mask(raw_obs)}
 
     def action_masks(self) -> np.ndarray:
@@ -109,23 +117,35 @@ class PettingZooConnect4GymEnv(gym.Env[np.ndarray, int]):
         self._mirror_episode = bool(
             self.config.symmetry_augmentation and np.random.random() < 0.5
         )
+        if self.config.randomize_train_agent:
+            self._train_agent = str(
+                np.random.choice(["player_0", "player_1"])
+            )
+        else:
+            self._train_agent = self.config.train_agent
         if self.opponent_sampler is not None:
             self.opponent_policy = self.opponent_sampler()
         self.env.reset(seed=seed, options=options)
         self._advance_until_train_turn()
-        raw_obs = self._raw_obs(self.config.train_agent)
+        raw_obs = self._raw_obs(self._train_agent)
         return self._format_obs(raw_obs), self._current_info()
 
     def step(self, action: int):
         if self._is_done():
-            raise RuntimeError("Cannot step() a finished episode. Call reset().")
-        if self.env.agent_selection != self.config.train_agent:
-            raise RuntimeError("Environment desynced: not training agent turn.")
+            raise RuntimeError(
+                "Cannot step() a finished episode. Call reset()."
+            )
+        if self.env.agent_selection != self._train_agent:
+            raise RuntimeError(
+                "Environment desynced: not training agent turn."
+            )
 
-        raw_obs = self._raw_obs(self.config.train_agent)
+        raw_obs = self._raw_obs(self._train_agent)
         action_mask = self._action_mask(raw_obs)
         if action_mask[action] == 0:
-            raise ValueError(f"Illegal action {action} for current board state.")
+            raise ValueError(
+                f"Illegal action {action} for current board state."
+            )
 
         self.env.step(self._to_env_action(action))
         self._advance_until_train_turn()
@@ -133,14 +153,14 @@ class PettingZooConnect4GymEnv(gym.Env[np.ndarray, int]):
         terminated = self._is_done()
         truncated = False
         reward = (
-            float(self.env.rewards[self.config.train_agent])
+            float(self.env.rewards[self._train_agent])
             if terminated
             else 0.0
         )
         if terminated:
             next_obs = np.zeros(self.observation_space.shape, dtype=np.float32)
         else:
-            next_obs = self._format_obs(self._raw_obs(self.config.train_agent))
+            next_obs = self._format_obs(self._raw_obs(self._train_agent))
         return next_obs, reward, terminated, truncated, self._current_info()
 
     def render(self):
@@ -148,4 +168,3 @@ class PettingZooConnect4GymEnv(gym.Env[np.ndarray, int]):
 
     def close(self) -> None:
         self.env.close()
-

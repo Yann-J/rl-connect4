@@ -126,11 +126,13 @@ class OpponentPool:
         choice = np.random.choice(choices, p=self._probs)
         if choice == "current" and self._current_policy is not None:
             return self._current_policy
-        if choice == "historical" and self._historical_policies:
+        if choice == "historical":
+            candidates = list(self._historical_policies)
             if self._elite_policy is not None:
-                return self._elite_policy
-            idx = int(np.random.randint(0, len(self._historical_policies)))
-            return self._historical_policies[idx]
+                candidates.append(self._elite_policy)
+            if candidates:
+                idx = int(np.random.randint(0, len(candidates)))
+                return candidates[idx]
         if choice == "mcts":
             return self._mcts_policy
         if choice == "rule_based":

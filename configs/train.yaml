@@ -2,10 +2,11 @@ run_name: "connect4_maskableppo_v1"
 
 env:
   symmetry_augmentation: true
+  randomize_train_agent: true
 
 train:
-  total_timesteps: 200000
-  learning_rate: 0.0001
+  total_timesteps: 2M
+  learning_rate: 1e-4
   n_steps: 2048
   batch_size: 512
   gamma: 0.99
@@ -15,7 +16,7 @@ train:
   cnn_res_blocks: 6
 
 self_play:
-  checkpoint_freq: 10000
+  checkpoint_freq: 10_000
   max_checkpoints: 20
   mcts_simulations: 50
   mix:

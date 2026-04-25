@@ -6,6 +6,12 @@ on:
       - main
   pull_request:
   workflow_dispatch:
+    inputs:
+      run_training:
+        description: "Run the training pipeline (set false to skip)"
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -18,10 +24,15 @@ concurrency:
 
 jobs:
   train-and-export:
-    if: "${{ github.event_name != 'push' || !contains(github.event.head_commit.message, 'ci: update trained policy artifact') }}"
     # Use AWS GPUs provisioned by RunsOn
     # runs-on: "runs-on=${{ github.run_id }}/family=g4dn.xlarge/image=ubuntu24-gpu-x64"
     runs-on: "ubuntu-latest"
+    env:
+      TRAINING_ENABLED: >-
+        ${{
+          vars.CI_DISABLE_TRAINING != 'true' &&
+          (github.event_name != 'workflow_dispatch' || inputs.run_training)
+        }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -40,25 +51,25 @@ jobs:
               - "scripts/**"
 
       - name: Set up Python
-        if: github.event_name == 'workflow_dispatch' || steps.changes.outputs.training == 'true'
+        if: env.TRAINING_ENABLED == 'true' && steps.changes.outputs.training == 'true'
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: "pip"
 
       - name: Install dependencies
-        if: github.event_name == 'workflow_dispatch' || steps.changes.outputs.training == 'true'
+        if: env.TRAINING_ENABLED == 'true' && steps.changes.outputs.training == 'true'
         run: pip install -e .
 
       - name: Startup checks
-        if: github.event_name == 'workflow_dispatch' || steps.changes.outputs.training == 'true'
+        if: env.TRAINING_ENABLED == 'true' && steps.changes.outputs.training == 'true'
         run: |
           nvidia-smi || true
           python --version
           pip --version
 
       - name: Start TensorBoard server
-        if: github.event_name == 'workflow_dispatch' || steps.changes.outputs.training == 'true'
+        if: env.TRAINING_ENABLED == 'true' && steps.changes.outputs.training == 'true'
         run: |
           set -euo pipefail
           mkdir -p /tmp/ci-tensorboard
@@ -66,7 +77,7 @@ jobs:
           echo "$!" > /tmp/ci-tensorboard/tensorboard.pid
 
       - name: Install cloudflared
-        if: github.event_name == 'workflow_dispatch' || steps.changes.outputs.training == 'true'
+        if: env.TRAINING_ENABLED == 'true' && steps.changes.outputs.training == 'true'
         run: |
           set -euo pipefail
           curl -L "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64" -o /tmp/cloudflared
@@ -74,7 +85,7 @@ jobs:
           sudo mv /tmp/cloudflared /usr/local/bin/cloudflared
 
       - name: Expose live TensorBoard URL
-        if: github.event_name == 'workflow_dispatch' || steps.changes.outputs.training == 'true'
+        if: env.TRAINING_ENABLED == 'true' && steps.changes.outputs.training == 'true'
         run: |
           set -euo pipefail
           cloudflared tunnel --url http://localhost:6006 --no-autoupdate > /tmp/ci-tensorboard/tunnel.log 2>&1 &
@@ -90,18 +101,20 @@ jobs:
           echo "${URL}" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Run training with provided config
-        if: github.event_name == 'workflow_dispatch' || steps.changes.outputs.training == 'true'
+        if: env.TRAINING_ENABLED == 'true' && steps.changes.outputs.training == 'true'
         run: python scripts/train.py --config configs/train.yaml
 
       - name: Cleanup TensorBoard tunnel
-        if: always() && (github.event_name == 'workflow_dispatch' || steps.changes.outputs.training == 'true')
+        if: always() && env.TRAINING_ENABLED == 'true' && steps.changes.outputs.training
+          == 'true'
+
         run: |
           kill "$(cat /tmp/ci-tensorboard/tunnel.pid)" 2>/dev/null || true
           kill "$(cat /tmp/ci-tensorboard/tensorboard.pid)" 2>/dev/null || true
 
       - name: Detect run directory
         id: run_dir
-        if: github.event_name == 'workflow_dispatch' || steps.changes.outputs.training == 'true'
+        if: env.TRAINING_ENABLED == 'true' && steps.changes.outputs.training == 'true'
         run: |
           set -euo pipefail
           RUN_DIR="$(ls -1d checkpoints/*/ | head -n 1)"
@@ -114,18 +127,20 @@ jobs:
           echo "run_name=${RUN_NAME}" >> "$GITHUB_OUTPUT"
 
       - name: Export ONNX model for web app
-        if: github.event_name == 'workflow_dispatch' || steps.changes.outputs.training == 'true'
+        if: env.TRAINING_ENABLED == 'true' && steps.changes.outputs.training == 'true'
         run: >
           python scripts/export_policy_onnx.py --model checkpoints/${{
           steps.run_dir.outputs.run_name }}/final_model.zip --output
           web/policy.onnx
 
       - name: Build static TensorBoard report
-        if: github.event_name == 'workflow_dispatch' || steps.changes.outputs.training == 'true'
+        if: env.TRAINING_ENABLED == 'true' && steps.changes.outputs.training == 'true'
         run: python scripts/build_tensorboard_report.py
 
       - name: Commit updated model artifact
-        if: (github.event_name == 'workflow_dispatch' || steps.changes.outputs.training == 'true') && github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        if: env.TRAINING_ENABLED == 'true' && steps.changes.outputs.training == 'true'
+          && github.event_name != 'pull_request' && github.ref ==
+          'refs/heads/main'
         run: |
           set -euo pipefail
           if git diff --quiet -- web/policy.onnx; then

@@ -46,6 +46,11 @@ The Tensorboard logs from the CI runs are summarized in a static report also pub
 
 Training takes several hours on the default Github runners (cpu), so CI is run on AWS GPUs managed via [RunsOn](https://runs-on.com/), which are much cheaper than GitHub GPUs.
 
+To quickly disable training in CI while keeping Pages deploy active:
+
+- Set repository variable `CI_DISABLE_TRAINING=true` (global kill switch)
+- Or trigger the workflow manually and set `run_training=false` (one-off skip)
+
 ## Quickstart
 
 ```bash

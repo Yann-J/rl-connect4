@@ -25,31 +25,31 @@ self_play:
     random: 0
     mcts: 0.3
     rule_based: 0
-  # phases:
-  #   - start_percent: 0
-  #     mcts_simulations: 50
-  #     mix:
-  #       current: 0.45
-  #       historical: 0.30
-  #       random: 0.10
-  #       mcts: 0.10
-  #       rule_based: 0.05
-  #   - start_percent: 10
-  #     mcts_simulations: 100
-  #     mix:
-  #       current: 0.35
-  #       historical: 0.35
-  #       random: 0
-  #       mcts: 0.3
-  #       rule_based: 0
-  #   - start_percent: 30
-  #     mcts_simulations: 200
-  #     mix:
-  #       current: 0.25
-  #       historical: 0.35
-  #       random: 0
-  #       mcts: 0.40
-  #       rule_based: 0
+  phases:
+    - start_percent: 0
+      mcts_simulations: 50
+      mix:
+        current: 0.45
+        historical: 0.30
+        random: 0.10
+        mcts: 0.10
+        rule_based: 0.05
+    - start_percent: 5
+      mcts_simulations: 100
+      mix:
+        current: 0.35
+        historical: 0.35
+        random: 0
+        mcts: 0.3
+        rule_based: 0
+    - start_percent: 20
+      mcts_simulations: 200
+      mix:
+        current: 0.25
+        historical: 0.35
+        random: 0
+        mcts: 0.40
+        rule_based: 0
 
 eval:
   eval_freq: 5000

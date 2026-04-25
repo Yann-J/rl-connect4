@@ -47,7 +47,7 @@ class SelfPlayEvalCallback(BaseCallback):
             curriculum or [],
             key=lambda phase: phase.start_timestep,
         )
-        self.league_config = league_config or LeagueConfig()
+        self.league_config = league_config
         self._applied_phase_idx = -1
         self.rolling_rewards = deque(maxlen=rolling_window)
 
@@ -96,25 +96,26 @@ class SelfPlayEvalCallback(BaseCallback):
             self.opponent_pool.set_current_model(self.model)
             self.opponent_pool.set_elite_checkpoint(new_checkpoint)
 
-            league_elos = run_checkpoint_league(
-                self.checkpoint_manager.paths,
-                self.league_config,
-            )
-            if league_elos:
-                best_path, best_elo = max(
-                    league_elos.items(),
-                    key=lambda item: item[1],
+            if self.league_config is not None:
+                league_elos = run_checkpoint_league(
+                    self.checkpoint_manager.paths,
+                    self.league_config,
                 )
-                self.opponent_pool.set_elite_checkpoint(best_path)
-                self.logger.record("league/best_elo", float(best_elo))
-                self.logger.record(
-                    "league/mean_elo",
-                    float(np.mean(list(league_elos.values()))),
-                )
-                self.logger.record(
-                    "league/selected_checkpoint_step",
-                    float(best_path.stem.split("_")[-1]),
-                )
+                if league_elos:
+                    best_path, best_elo = max(
+                        league_elos.items(),
+                        key=lambda item: item[1],
+                    )
+                    self.opponent_pool.set_elite_checkpoint(best_path)
+                    self.logger.record("league/best_elo", float(best_elo))
+                    self.logger.record(
+                        "league/mean_elo",
+                        float(np.mean(list(league_elos.values()))),
+                    )
+                    self.logger.record(
+                        "league/selected_checkpoint_step",
+                        float(best_path.stem.split("_")[-1]),
+                    )
 
         if self.n_calls % self.eval_freq == 0:
             random_metrics = evaluate_vs_opponent(

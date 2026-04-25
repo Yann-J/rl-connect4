@@ -133,6 +133,7 @@ def main() -> None:
     self_play_cfg = cfg["self_play"]
     env_cfg = cfg.get("env", {})
     league_cfg = cfg.get("league", {})
+    league_enabled = bool(league_cfg.get("enabled", True))
     n_envs = cfg_int(train_cfg.get("num_envs", 1))
 
     opponent_pool = OpponentPool(
@@ -190,11 +191,15 @@ def main() -> None:
         curriculum=parse_curriculum(
             self_play_cfg, total_timesteps=cfg_int(train_cfg["total_timesteps"])
         ),
-        league_config=LeagueConfig(
-            n_games_per_pair=cfg_int(league_cfg.get("n_games_per_pair", 5)),
-            max_policies=cfg_int(league_cfg.get("max_policies", 10)),
-            initial_elo=cfg_float(league_cfg.get("initial_elo", 1000.0)),
-            k_factor=cfg_float(league_cfg.get("k_factor", 24.0)),
+        league_config=(
+            LeagueConfig(
+                n_games_per_pair=cfg_int(league_cfg.get("n_games_per_pair", 5)),
+                max_policies=cfg_int(league_cfg.get("max_policies", 10)),
+                initial_elo=cfg_float(league_cfg.get("initial_elo", 1000.0)),
+                k_factor=cfg_float(league_cfg.get("k_factor", 24.0)),
+            )
+            if league_enabled
+            else None
         ),
     )
 

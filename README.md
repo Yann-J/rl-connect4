@@ -22,7 +22,7 @@ This was developed from scratch but heavily inspired from the following referenc
 - ML model using:
   - Residual CNN feature extractor (stack of 3x3 conv blocks)
   - Policy/value MLP heads on top of extracted features
-- Simple sparse rewards (`-1/0/+1`), since games are quite short/finite
+- Simple sparse terminal reward (`-1/0/+1`), since games are quite short/finite
 - TensorBoard metrics for reward and win-rate baselines
 
 ## Learning strategy

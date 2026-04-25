@@ -28,11 +28,12 @@ jobs:
     # runs-on: "runs-on=${{ github.run_id }}/family=g4dn.xlarge/image=ubuntu24-gpu-x64"
     runs-on: "ubuntu-latest"
     env:
-      TRAINING_ENABLED: >-
-        ${{
-          vars.CI_DISABLE_TRAINING != 'true' &&
-          (github.event_name != 'workflow_dispatch' || inputs.run_training)
-        }}
+      TRAINING_ENABLED: "false"
+      # TRAINING_ENABLED: >-
+      #   ${{
+      #     vars.CI_DISABLE_TRAINING != 'true' &&
+      #     (github.event_name != 'workflow_dispatch' || inputs.run_training)
+      #   }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4

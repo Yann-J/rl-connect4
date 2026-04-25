@@ -6,10 +6,9 @@ from dataclasses import dataclass
 import numpy as np
 from stable_baselines3.common.callbacks import BaseCallback
 
-from rl_connect4.envs.pettingzoo_connect4 import random_legal_policy
 from rl_connect4.eval.evaluate import evaluate_vs_opponent
 from rl_connect4.mcts.mcts import make_mcts_policy
-from rl_connect4.policies.rule_based import rule_based_policy
+from rl_connect4.mcts.puct import make_puct_policy
 from rl_connect4.training.checkpoints import CheckpointManager
 from rl_connect4.training.league import LeagueConfig, run_checkpoint_league
 from rl_connect4.training.opponent_pool import OpponentMix, OpponentPool
@@ -118,41 +117,29 @@ class SelfPlayEvalCallback(BaseCallback):
                     )
 
         if self.n_calls % self.eval_freq == 0:
-            random_metrics = evaluate_vs_opponent(
-                self.model,
-                opponent_policy=random_legal_policy,
-                n_episodes=self.n_eval_episodes,
-            )
             mcts_metrics = evaluate_vs_opponent(
                 self.model,
                 opponent_policy=make_mcts_policy(self.mcts_simulations),
                 n_episodes=self.n_eval_episodes,
             )
-            rule_based_metrics = evaluate_vs_opponent(
+            puct_metrics = evaluate_vs_opponent(
                 self.model,
-                opponent_policy=rule_based_policy,
+                opponent_policy=make_puct_policy(
+                    self.model,
+                    simulations=self.opponent_pool.puct_simulations,
+                    c_puct=self.opponent_pool.puct_c_puct,
+                ),
                 n_episodes=self.n_eval_episodes,
             )
-            self.logger.record(
-                "eval/random_win_rate",
-                random_metrics["win_rate"],
-            )
             self.logger.record("eval/mcts_win_rate", mcts_metrics["win_rate"])
-            self.logger.record(
-                "eval/rule_based_win_rate",
-                rule_based_metrics["win_rate"],
-            )
-            self.logger.record(
-                "eval/random_mean_reward",
-                random_metrics["mean_reward"],
-            )
+            self.logger.record("eval/puct_win_rate", puct_metrics["win_rate"])
             self.logger.record(
                 "eval/mcts_mean_reward",
                 mcts_metrics["mean_reward"],
             )
             self.logger.record(
-                "eval/rule_based_mean_reward",
-                rule_based_metrics["mean_reward"],
+                "eval/puct_mean_reward",
+                puct_metrics["mean_reward"],
             )
 
             if self.rolling_rewards:

@@ -12,6 +12,7 @@ from rl_connect4.envs.pettingzoo_connect4 import (
     random_legal_policy,
 )
 from rl_connect4.mcts.mcts import make_mcts_policy
+from rl_connect4.mcts.puct import make_puct_policy
 from rl_connect4.policies.rule_based import rule_based_policy
 
 
@@ -77,17 +78,25 @@ class OpponentMix:
     historical: float = 0.3
     random: float = 0.1
     mcts: float = 0.05
+    puct: float = 0.0
     rule_based: float = 0.05
 
 
 class OpponentPool:
-    def __init__(self, mix: OpponentMix, mcts_simulations: int = 100) -> None:
+    def __init__(
+        self,
+        mix: OpponentMix,
+        mcts_simulations: int = 100,
+        puct_simulations: int = 128,
+        puct_c_puct: float = 1.5,
+    ) -> None:
         probs = np.array(
             [
                 mix.current,
                 mix.historical,
                 mix.random,
                 mix.mcts,
+                mix.puct,
                 mix.rule_based,
             ],
             dtype=np.float64,
@@ -99,6 +108,9 @@ class OpponentPool:
         self._mcts_policy = make_mcts_policy(
             simulations=self._mcts_simulations
         )
+        self._puct_simulations = int(puct_simulations)
+        self._puct_c_puct = float(puct_c_puct)
+        self._puct_policy: OpponentPolicy | None = None
         self._current_policy: OpponentPolicy | None = None
         self._historical_policies: list[OpponentPolicy] = []
         self._historical_sampling_probs: np.ndarray = np.array(
@@ -108,6 +120,11 @@ class OpponentPool:
 
     def set_current_model(self, model: PredictModel) -> None:
         self._current_policy = make_model_policy(model, deterministic=True)
+        self._puct_policy = make_puct_policy(
+            model,
+            simulations=self._puct_simulations,
+            c_puct=self._puct_c_puct,
+        )
 
     def refresh_historical(self, checkpoint_paths: list[Path]) -> None:
         self._historical_policies = [
@@ -136,6 +153,7 @@ class OpponentPool:
                 mix.historical,
                 mix.random,
                 mix.mcts,
+                mix.puct,
                 mix.rule_based,
             ],
             dtype=np.float64,
@@ -150,8 +168,32 @@ class OpponentPool:
             simulations=self._mcts_simulations
         )
 
+    def set_puct_params(
+        self, simulations: int | None = None, c_puct: float | None = None
+    ) -> None:
+        if simulations is not None:
+            self._puct_simulations = int(simulations)
+        if c_puct is not None:
+            self._puct_c_puct = float(c_puct)
+        self._puct_policy = None
+
+    @property
+    def puct_simulations(self) -> int:
+        return self._puct_simulations
+
+    @property
+    def puct_c_puct(self) -> float:
+        return self._puct_c_puct
+
     def sample(self) -> OpponentPolicy:
-        choices = ["current", "historical", "random", "mcts", "rule_based"]
+        choices = [
+            "current",
+            "historical",
+            "random",
+            "mcts",
+            "puct",
+            "rule_based",
+        ]
         choice = np.random.choice(choices, p=self._probs)
         if choice == "current" and self._current_policy is not None:
             return self._current_policy
@@ -182,6 +224,8 @@ class OpponentPool:
                 return candidates[idx]
         if choice == "mcts":
             return self._mcts_policy
+        if choice == "puct" and self._puct_policy is not None:
+            return self._puct_policy
         if choice == "rule_based":
             return rule_based_policy
         return random_legal_policy

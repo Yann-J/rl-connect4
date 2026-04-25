@@ -109,6 +109,7 @@ def parse_curriculum(
                     historical=cfg_float(mix_cfg["historical"]),
                     random=cfg_float(mix_cfg["random"]),
                     mcts=cfg_float(mix_cfg.get("mcts", 0.0)),
+                    puct=cfg_float(mix_cfg.get("puct", 0.0)),
                     rule_based=cfg_float(mix_cfg.get("rule_based", 0.0)),
                 ),
                 mcts_simulations=cfg_int(phase["mcts_simulations"]),
@@ -142,11 +143,14 @@ def main() -> None:
             historical=cfg_float(self_play_cfg["mix"]["historical"]),
             random=cfg_float(self_play_cfg["mix"]["random"]),
             mcts=cfg_float(self_play_cfg["mix"].get("mcts", 0.0)),
+            puct=cfg_float(self_play_cfg["mix"].get("puct", 0.0)),
             rule_based=cfg_float(self_play_cfg["mix"].get("rule_based", 0.0)),
         ),
         mcts_simulations=cfg_int(
             self_play_cfg.get("mcts_simulations", eval_cfg["mcts_simulations"])
         ),
+        puct_simulations=cfg_int(self_play_cfg.get("puct_simulations", 128)),
+        puct_c_puct=cfg_float(self_play_cfg.get("puct_c_puct", 1.5)),
     )
 
     env = DummyVecEnv([make_env(opponent_pool, env_cfg, rank=i) for i in range(n_envs)])

@@ -1,4 +1,4 @@
-run_name: "connect4_maskableppo_v3"
+run_name: "connect4_maskableppo_puct"
 
 env:
   symmetry_augmentation: true
@@ -19,11 +19,14 @@ self_play:
   checkpoint_freq: 10_000
   max_checkpoints: 20
   mcts_simulations: 100
+  puct_simulations: 128
+  puct_c_puct: 1.5
   mix:
     current: 0.4
     historical: 0.3
     random: 0
-    mcts: 0.3
+    mcts: 0.25
+    puct: 0.05
     rule_based: 0
   phases:
     - start_percent: 0
@@ -33,6 +36,7 @@ self_play:
         historical: 0.30
         random: 0.10
         mcts: 0.10
+        puct: 0
         rule_based: 0.05
     - start_percent: 5
       mcts_simulations: 100
@@ -40,7 +44,8 @@ self_play:
         current: 0.35
         historical: 0.35
         random: 0
-        mcts: 0.3
+        mcts: 0.25
+        puct: 0.05
         rule_based: 0
     - start_percent: 20
       mcts_simulations: 200
@@ -48,7 +53,8 @@ self_play:
         current: 0.25
         historical: 0.35
         random: 0
-        mcts: 0.40
+        mcts: 0.15
+        puct: 0.25
         rule_based: 0
 
 eval:

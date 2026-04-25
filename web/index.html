@@ -45,11 +45,36 @@
       <div class="toolbar">
         <button id="new-human-first">New game (you start)</button>
         <button id="new-ai-first" class="secondary">New game (AI starts)</button>
+        <button
+          id="open-settings"
+          class="icon-button secondary"
+          type="button"
+          aria-label="Open settings"
+          title="Settings"
+        >
+          <img
+            src="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/icons/gear.svg"
+            alt=""
+            aria-hidden="true"
+          />
+        </button>
       </div>
       <div id="status">Loading ONNX model...</div>
       <section id="board" class="board" aria-label="Connect-4 board"></section>
-      <div class="legend">🟡 = you  🔴 = policy (`web/policy.onnx`)</div>
+      <div id="legend" class="legend">🟡 = you  🔴 = policy (`web/policy.onnx`)</div>
     </main>
+
+    <div id="settings-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+      <div class="modal-content">
+        <h2 id="settings-title">Settings</h2>
+        <label class="field-label" for="model-name-input">Model file name</label>
+        <input id="model-name-input" type="text" placeholder="policy.onnx" />
+        <div class="modal-actions">
+          <button id="cancel-settings" class="secondary" type="button">Cancel</button>
+          <button id="save-settings" type="button">Save</button>
+        </div>
+      </div>
+    </div>
 
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
     <script src="./app.js"></script>

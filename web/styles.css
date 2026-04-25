@@ -20,6 +20,19 @@ button {
   cursor: pointer;
 }
 button.secondary { background: #2f3242; }
+.icon-button {
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.icon-button img {
+  width: 18px;
+  height: 18px;
+  filter: brightness(0) invert(1);
+}
 button:disabled { opacity: 0.55; cursor: not-allowed; }
 #status { margin-bottom: 10px; min-height: 1.4em; }
 .board {
@@ -103,6 +116,50 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
 }
 .github-corner:hover {
   background: #2b7cff;
+}
+.modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: grid;
+  place-items: center;
+  z-index: 20;
+}
+.hidden {
+  display: none !important;
+}
+.modal-content {
+  width: min(420px, 92vw);
+  background: #1c1f2d;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 18px;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
+}
+.modal-content h2 {
+  margin: 0 0 12px;
+  font-size: 1.1rem;
+}
+.field-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 0.92rem;
+}
+#model-name-input {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 10px;
+  background: #12131a;
+  color: #eef0f7;
+  padding: 10px 12px;
+  font-size: 0.95rem;
+}
+.modal-actions {
+  margin-top: 14px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 @keyframes firework-burst {

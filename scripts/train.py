@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import re
+import shutil
 import sys
 from pathlib import Path
 
@@ -87,6 +88,9 @@ def parse_curriculum(
     self_play_cfg: dict, total_timesteps: int
 ) -> list[CurriculumPhase]:
     phases = self_play_cfg.get("phases", [])
+    default_puct_simulations = cfg_int(
+        self_play_cfg.get("puct_simulations", 128)
+    )
     parsed: list[CurriculumPhase] = []
     for phase in phases:
         mix_cfg = phase["mix"]
@@ -113,6 +117,9 @@ def parse_curriculum(
                     rule_based=cfg_float(mix_cfg.get("rule_based", 0.0)),
                 ),
                 mcts_simulations=cfg_int(phase["mcts_simulations"]),
+                puct_simulations=cfg_int(
+                    phase.get("puct_simulations", default_puct_simulations)
+                ),
             )
         )
     return parsed
@@ -127,7 +134,8 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    cfg = load_config(args.config)
+    config_path = Path(args.config).resolve()
+    cfg = load_config(config_path)
     run_name = cfg["run_name"]
     train_cfg = cfg["train"]
     eval_cfg = cfg["eval"]
@@ -136,6 +144,10 @@ def main() -> None:
     league_cfg = cfg.get("league", {})
     league_enabled = bool(league_cfg.get("enabled", True))
     n_envs = cfg_int(train_cfg.get("num_envs", 1))
+
+    run_dir = Path("runs") / run_name
+    run_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(config_path, run_dir / "train_config.yaml")
 
     opponent_pool = OpponentPool(
         OpponentMix(

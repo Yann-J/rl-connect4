@@ -1,4 +1,4 @@
-run_name: "connect4_maskableppo_puct"
+run_name: "connect4_maskableppo_puct_league"
 
 env:
   symmetry_augmentation: true
@@ -6,7 +6,7 @@ env:
 
 train:
   total_timesteps: 2M
-  learning_rate: 1e-4
+  learning_rate: 3e-4
   n_steps: 2048
   batch_size: 512
   gamma: 0.99
@@ -19,7 +19,7 @@ self_play:
   checkpoint_freq: 10_000
   max_checkpoints: 20
   mcts_simulations: 100
-  puct_simulations: 128
+  puct_simulations: 32
   puct_c_puct: 1.5
   mix:
     current: 0.4
@@ -31,40 +31,55 @@ self_play:
   phases:
     - start_percent: 0
       mcts_simulations: 50
+      puct_simulations: 16
       mix:
-        current: 0.45
-        historical: 0.30
-        random: 0.10
-        mcts: 0.10
+        current: 0.5
+        historical: 0.3
+        random: 0.1
+        mcts: 0.1
         puct: 0
-        rule_based: 0.05
+        rule_based: 0
     - start_percent: 5
       mcts_simulations: 100
+      puct_simulations: 24
       mix:
         current: 0.35
         historical: 0.35
         random: 0
-        mcts: 0.25
-        puct: 0.05
+        mcts: 0.3
+        puct: 0
         rule_based: 0
-    - start_percent: 20
+    - start_percent: 10
       mcts_simulations: 200
+      puct_simulations: 32
       mix:
         current: 0.25
         historical: 0.35
         random: 0
-        mcts: 0.15
-        puct: 0.25
+        mcts: 0.35
+        puct: 0.05
+        rule_based: 0
+    - start_percent: 20
+      start_timestep: 128
+      mcts_simulations: 200
+      puct_simulations: 48
+      mix:
+        current: 0.3
+        historical: 0.2
+        random: 0
+        mcts: 0.4
+        puct: 0.1
         rule_based: 0
 
 eval:
   eval_freq: 5000
   n_eval_episodes: 200
   mcts_simulations: 200
+  puct_simulations: 128
 
 league:
-  enabled: false
-  n_games_per_pair: 5
-  max_policies: 10
+  enabled: true
+  n_games_per_pair: 8
+  max_policies: 4
   initial_elo: 1000.0
   k_factor: 24.0

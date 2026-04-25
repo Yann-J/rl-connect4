@@ -6,8 +6,14 @@ const P2 = 2;
 
 const boardEl = document.getElementById("board");
 const statusEl = document.getElementById("status");
+const legendEl = document.getElementById("legend");
 const newHumanFirstBtn = document.getElementById("new-human-first");
 const newAiFirstBtn = document.getElementById("new-ai-first");
+const openSettingsBtn = document.getElementById("open-settings");
+const settingsModalEl = document.getElementById("settings-modal");
+const modelNameInput = document.getElementById("model-name-input");
+const cancelSettingsBtn = document.getElementById("cancel-settings");
+const saveSettingsBtn = document.getElementById("save-settings");
 
 let board = createEmptyBoard();
 let done = false;
@@ -19,6 +25,25 @@ let session = null;
 let isAnimatingMove = false;
 let endgameAnimationPlayed = false;
 let downloadedModelBytes = 0;
+const MODEL_STORAGE_KEY = "connect4-model-name";
+const DEFAULT_MODEL_NAME = "policy.onnx";
+let modelName = loadModelNameSetting();
+
+function normalizeModelName(rawName) {
+  const trimmed = String(rawName || "").trim();
+  return trimmed.length > 0 ? trimmed : DEFAULT_MODEL_NAME;
+}
+
+function loadModelNameSetting() {
+  const stored = window.localStorage.getItem(MODEL_STORAGE_KEY);
+  return normalizeModelName(stored);
+}
+
+function saveModelNameSetting(nextName) {
+  const normalized = normalizeModelName(nextName);
+  window.localStorage.setItem(MODEL_STORAGE_KEY, normalized);
+  return normalized;
+}
 
 function createEmptyBoard() {
   return Array.from({ length: ROWS }, () => Array(COLS).fill(EMPTY));
@@ -121,6 +146,10 @@ async function chooseAiColumn() {
 
 function updateStatus(text) {
   statusEl.textContent = text;
+}
+
+function updateLegend() {
+  legendEl.textContent = `🟡 = you  🔴 = policy (\`web/${modelName}\`)`;
 }
 
 function formatDownloadedBytes(bytes) {
@@ -375,8 +404,10 @@ async function newGame(humanStarts) {
 
 async function loadModel() {
   try {
+    session = null;
     downloadedModelBytes = 0;
-    const response = await fetch("./policy.onnx");
+    updateStatus(gameStateText());
+    const response = await fetch(`./${modelName}`);
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);
     }
@@ -412,12 +443,59 @@ async function loadModel() {
     session = await ort.InferenceSession.create(modelData.buffer);
     await newGame(true);
   } catch (error) {
-    updateStatus(`Failed to load policy.onnx: ${error.message}`);
+    updateStatus(`Failed to load ${modelName}: ${error.message}`);
     render();
   }
 }
 
+function openSettingsModal() {
+  modelNameInput.value = modelName;
+  settingsModalEl.classList.remove("hidden");
+  modelNameInput.focus();
+  modelNameInput.select();
+}
+
+function closeSettingsModal() {
+  settingsModalEl.classList.add("hidden");
+}
+
+async function handleSaveSettings() {
+  const nextModelName = saveModelNameSetting(modelNameInput.value);
+  if (nextModelName === modelName) {
+    closeSettingsModal();
+    return;
+  }
+  modelName = nextModelName;
+  updateLegend();
+  closeSettingsModal();
+  await loadModel();
+}
+
 newHumanFirstBtn.addEventListener("click", () => newGame(true));
 newAiFirstBtn.addEventListener("click", () => newGame(false));
+openSettingsBtn.addEventListener("click", openSettingsModal);
+cancelSettingsBtn.addEventListener("click", closeSettingsModal);
+saveSettingsBtn.addEventListener("click", () => {
+  handleSaveSettings();
+});
+modelNameInput.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    handleSaveSettings();
+  } else if (event.key === "Escape") {
+    event.preventDefault();
+    closeSettingsModal();
+  }
+});
+settingsModalEl.addEventListener("click", (event) => {
+  if (event.target === settingsModalEl) closeSettingsModal();
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !settingsModalEl.classList.contains("hidden")) {
+    closeSettingsModal();
+  }
+});
+
+updateLegend();
 render();
 loadModel();

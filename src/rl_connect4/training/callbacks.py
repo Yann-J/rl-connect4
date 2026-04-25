@@ -19,6 +19,7 @@ class CurriculumPhase:
     start_timestep: int
     mix: OpponentMix
     mcts_simulations: int
+    puct_simulations: int
 
 
 class SelfPlayEvalCallback(BaseCallback):
@@ -65,11 +66,18 @@ class SelfPlayEvalCallback(BaseCallback):
             phase = self.curriculum[active_idx]
             self.opponent_pool.set_mix(phase.mix)
             self.opponent_pool.set_mcts_simulations(phase.mcts_simulations)
+            self.opponent_pool.set_puct_params(
+                simulations=phase.puct_simulations
+            )
             self._applied_phase_idx = active_idx
             self.logger.record("train/curriculum_phase", float(active_idx))
             self.logger.record(
                 "train/curriculum_mcts_simulations",
                 float(phase.mcts_simulations),
+            )
+            self.logger.record(
+                "train/curriculum_puct_simulations",
+                float(phase.puct_simulations),
             )
 
     def _on_step(self) -> bool:

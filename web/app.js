@@ -18,6 +18,7 @@ let aiPiece = P2;
 let session = null;
 let isAnimatingMove = false;
 let endgameAnimationPlayed = false;
+let downloadedModelBytes = 0;
 
 function createEmptyBoard() {
   return Array.from({ length: ROWS }, () => Array(COLS).fill(EMPTY));
@@ -122,13 +123,34 @@ function updateStatus(text) {
   statusEl.textContent = text;
 }
 
+function formatDownloadedBytes(bytes) {
+  if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB"];
+  let value = bytes;
+  let unitIdx = 0;
+  while (value >= 1024 && unitIdx < units.length - 1) {
+    value /= 1024;
+    unitIdx += 1;
+  }
+  const rounded =
+    value >= 100 || unitIdx === 0
+      ? Math.round(value).toString()
+      : value.toFixed(1);
+  return `${rounded} ${units[unitIdx]}`;
+}
+
 function gameStateText() {
   if (done) {
     if (winner === humanPiece) return "You win! 🎉";
     if (winner === aiPiece) return "AI wins... 😭";
     return "Draw... 🤝";
   }
-  if (!session) return "Loading ONNX model...";
+  if (!session) {
+    if (downloadedModelBytes > 0) {
+      return `Loading ONNX model... (${formatDownloadedBytes(downloadedModelBytes)})`;
+    }
+    return "Loading ONNX model...";
+  }
   return currentPlayer === humanPiece
     ? "Your turn... 🤔"
     : "AI is thinking... 🤔";
@@ -353,7 +375,41 @@ async function newGame(humanStarts) {
 
 async function loadModel() {
   try {
-    session = await ort.InferenceSession.create("./policy.onnx");
+    downloadedModelBytes = 0;
+    const response = await fetch("./policy.onnx");
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    let modelData;
+    if (!response.body) {
+      modelData = new Uint8Array(await response.arrayBuffer());
+      downloadedModelBytes = modelData.byteLength;
+      updateStatus(gameStateText());
+    } else {
+      const reader = response.body.getReader();
+      const chunks = [];
+      let totalLength = 0;
+
+      while (true) {
+        const { done: streamDone, value } = await reader.read();
+        if (streamDone) break;
+        if (!value) continue;
+        chunks.push(value);
+        totalLength += value.byteLength;
+        downloadedModelBytes = totalLength;
+        updateStatus(gameStateText());
+      }
+
+      modelData = new Uint8Array(totalLength);
+      let offset = 0;
+      for (const chunk of chunks) {
+        modelData.set(chunk, offset);
+        offset += chunk.byteLength;
+      }
+    }
+
+    session = await ort.InferenceSession.create(modelData.buffer);
     await newGame(true);
   } catch (error) {
     updateStatus(`Failed to load policy.onnx: ${error.message}`);

@@ -3,6 +3,7 @@ run_name: "connect4_maskableppo_puct_league"
 env:
   symmetry_augmentation: true
   randomize_train_agent: true
+  empty_cell_ratio_terminal_reward: true
 
 train:
   total_timesteps: 2M

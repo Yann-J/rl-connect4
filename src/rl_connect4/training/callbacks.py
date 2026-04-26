@@ -42,6 +42,7 @@ class SelfPlayEvalCallback(BaseCallback):
         eval_random_side: bool = True,
         eval_random_episode_seeds: bool = True,
         eval_rng_seed: int | None = None,
+        eval_empty_cell_ratio_terminal_reward: bool = False,
         verbose: int = 0,
     ) -> None:
         super().__init__(verbose=verbose)
@@ -68,6 +69,9 @@ class SelfPlayEvalCallback(BaseCallback):
         self.eval_random_side = eval_random_side
         self.eval_random_episode_seeds = eval_random_episode_seeds
         self.eval_rng_seed = eval_rng_seed
+        self.eval_empty_cell_ratio_terminal_reward = (
+            eval_empty_cell_ratio_terminal_reward
+        )
 
     def _on_training_start(self) -> None:
         if self.train_config_path is not None:
@@ -160,6 +164,7 @@ class SelfPlayEvalCallback(BaseCallback):
                 random_episode_seeds=self.eval_random_episode_seeds,
                 rng_seed=self.eval_rng_seed,
                 episode_seed_rng=self._eval_episode_seed_rng,
+                empty_cell_ratio_terminal_reward=self.eval_empty_cell_ratio_terminal_reward,
             )
             self.logger.record("eval/mcts_win_rate", mcts_metrics["win_rate"])
             self.logger.record(
@@ -185,6 +190,7 @@ class SelfPlayEvalCallback(BaseCallback):
                     random_episode_seeds=self.eval_random_episode_seeds,
                     rng_seed=self.eval_rng_seed,
                     episode_seed_rng=self._eval_episode_seed_rng,
+                    empty_cell_ratio_terminal_reward=self.eval_empty_cell_ratio_terminal_reward,
                 )
                 self.logger.record(
                     f"eval/puct/{puct_sims}/win_rate",

@@ -25,6 +25,7 @@ def evaluate_vs_opponent(
     random_episode_seeds: bool = True,
     rng_seed: int | None = None,
     episode_seed_rng: Generator | None = None,
+    empty_cell_ratio_terminal_reward: bool = False,
 ) -> dict[str, float]:
     """Run ``n_episodes`` against ``opponent_policy``.
 
@@ -33,10 +34,14 @@ def evaluate_vs_opponent(
 
     Pass ``episode_seed_rng`` to share one stream across several eval batches
     (e.g. MCTS then PUCT) so episode seeds do not repeat when ``rng_seed`` is fixed.
+
+    When ``empty_cell_ratio_terminal_reward`` is true, terminal rewards match the
+    training env (sparse ±1 plus empty-cell speed term on win/loss).
     """
     config = Connect4Config(
         symmetry_augmentation=random_symmetry,
         randomize_train_agent=random_side,
+        empty_cell_ratio_terminal_reward=empty_cell_ratio_terminal_reward,
     )
     env = PettingZooConnect4GymEnv(opponent_policy=opponent_policy, config=config)
     wins = 0

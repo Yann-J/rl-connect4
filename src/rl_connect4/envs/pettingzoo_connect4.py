@@ -24,12 +24,15 @@ class Connect4Config:
     render_mode: str | None = None
     symmetry_augmentation: bool = False
     randomize_train_agent: bool = False
+    # Terminal-only: ±empty_cell_ratio on win/loss (see step()).
+    empty_cell_ratio_terminal_reward: bool = False
 
 
 class PettingZooConnect4GymEnv(gym.Env[np.ndarray, int]):
     """Single-agent Gym wrapper around PettingZoo Connect Four."""
 
     metadata = {"render_modes": ["human"], "render_fps": 30}
+    _board_cell_count = 6 * 7
 
     def __init__(
         self,
@@ -58,9 +61,7 @@ class PettingZooConnect4GymEnv(gym.Env[np.ndarray, int]):
         self.opponent_policy = policy
 
     def _is_done(self) -> bool:
-        return any(self.env.terminations.values()) or any(
-            self.env.truncations.values()
-        )
+        return any(self.env.terminations.values()) or any(self.env.truncations.values())
 
     def _raw_obs(self, agent: str) -> dict:
         return self.env.observe(agent)
@@ -84,28 +85,25 @@ class PettingZooConnect4GymEnv(gym.Env[np.ndarray, int]):
             return self.action_space.n - 1 - int(action)
         return int(action)
 
+    def _empty_cell_ratio(self) -> float:
+        raw_obs = self._raw_obs(self._train_agent)
+        board = np.asarray(raw_obs["observation"], dtype=np.float32)
+        occupied_cells = float(np.sum(board[:, :, 0] + board[:, :, 1]))
+        return (self._board_cell_count - occupied_cells) / self._board_cell_count
+
     def _advance_until_train_turn(self) -> None:
-        while (
-            not self._is_done()
-            and self.env.agent_selection != self._train_agent
-        ):
+        while not self._is_done() and self.env.agent_selection != self._train_agent:
             agent = self.env.agent_selection
             raw_obs = self._raw_obs(agent)
             action_mask = self._action_mask(raw_obs)
-            action = self.opponent_policy(
-                self._format_obs(raw_obs), action_mask
-            )
+            action = self.opponent_policy(self._format_obs(raw_obs), action_mask)
             if action_mask[action] == 0:
                 action = int(np.flatnonzero(action_mask)[0])
             self.env.step(self._to_env_action(action))
 
     def _current_info(self) -> dict:
         if self._is_done():
-            return {
-                "action_mask": np.zeros(
-                    self.action_space.n, dtype=np.int8
-                )
-            }
+            return {"action_mask": np.zeros(self.action_space.n, dtype=np.int8)}
         raw_obs = self._raw_obs(self._train_agent)
         return {"action_mask": self._action_mask(raw_obs)}
 
@@ -133,31 +131,27 @@ class PettingZooConnect4GymEnv(gym.Env[np.ndarray, int]):
 
     def step(self, action: int):
         if self._is_done():
-            raise RuntimeError(
-                "Cannot step() a finished episode. Call reset()."
-            )
+            raise RuntimeError("Cannot step() a finished episode. Call reset().")
         if self.env.agent_selection != self._train_agent:
-            raise RuntimeError(
-                "Environment desynced: not training agent turn."
-            )
+            raise RuntimeError("Environment desynced: not training agent turn.")
 
         raw_obs = self._raw_obs(self._train_agent)
         action_mask = self._action_mask(raw_obs)
         if action_mask[action] == 0:
-            raise ValueError(
-                f"Illegal action {action} for current board state."
-            )
+            raise ValueError(f"Illegal action {action} for current board state.")
 
         self.env.step(self._to_env_action(action))
         self._advance_until_train_turn()
 
         terminated = self._is_done()
         truncated = False
-        reward = (
-            float(self.env.rewards[self._train_agent])
-            if terminated
-            else 0.0
-        )
+        reward = float(self.env.rewards[self._train_agent]) if terminated else 0.0
+        if terminated and self.config.empty_cell_ratio_terminal_reward:
+            empty_ratio = self._empty_cell_ratio()
+            if reward > 0.0:
+                reward += empty_ratio
+            elif reward < 0.0:
+                reward -= empty_ratio
         if terminated:
             next_obs = np.zeros(self.observation_space.shape, dtype=np.float32)
         else:

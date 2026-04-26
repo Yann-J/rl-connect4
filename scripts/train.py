@@ -93,6 +93,9 @@ def make_env(pool: OpponentPool, env_cfg: dict, rank: int = 0):
         config = Connect4Config(
             symmetry_augmentation=bool(env_cfg.get("symmetry_augmentation", False)),
             randomize_train_agent=bool(env_cfg.get("randomize_train_agent", False)),
+            empty_cell_ratio_terminal_reward=bool(
+                env_cfg.get("empty_cell_ratio_terminal_reward", False)
+            ),
         )
         env = PettingZooConnect4GymEnv(
             opponent_sampler=pool.sample,
@@ -217,6 +220,10 @@ def main() -> None:
     if eval_rng_seed is not None:
         eval_rng_seed = cfg_int(eval_rng_seed)
 
+    empty_cell_ratio_terminal_reward = bool(
+        env_cfg.get("empty_cell_ratio_terminal_reward", False)
+    )
+
     callback = SelfPlayEvalCallback(
         opponent_pool=opponent_pool,
         checkpoint_manager=checkpoint_manager,
@@ -229,6 +236,7 @@ def main() -> None:
         eval_random_side=bool(eval_cfg.get("random_side", True)),
         eval_random_episode_seeds=bool(eval_cfg.get("random_episode_seeds", True)),
         eval_rng_seed=eval_rng_seed,
+        eval_empty_cell_ratio_terminal_reward=empty_cell_ratio_terminal_reward,
         train_config_path=config_path,
         curriculum=parse_curriculum(
             self_play_cfg, total_timesteps=cfg_int(train_cfg["total_timesteps"])

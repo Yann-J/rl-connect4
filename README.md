@@ -8,6 +8,10 @@ The online game is available [here](https://yann-j.github.io/rl-connect4).
 
 ![Screenshot](docs/screenshot.png)
 
+The objective was of course not to build the best Connect-4 agent (this is a solved game that tree search can exhaustively explore), but a personal challenge to explore RL techniques.
+
+the result is an agent is decent but I was hoping for stronger result (I'm still tuning it).
+
 This was developed from scratch but heavily inspired from the following references to get me started (though I ended up with very different choices):
 
 - [Connect Zero](https://codebox.net/pages/connect4)
@@ -23,20 +27,37 @@ This was developed from scratch but heavily inspired from the following referenc
   - Residual CNN feature extractor (stack of 3x3 conv blocks)
   - Policy/value MLP heads on top of extracted features
 - Simple sparse terminal reward (`-1/0/+1`), since games are quite short/finite
+- Training against a mix of opponents:
+  - Self (or recent historical checkpoints)
+  - Random policy
+  - Monte-Carlo Tree Search (MCTS) policy (playing N games and picking best action) with increasing strength (to keep a learning gradient)
+  -PUCT
+- All hyperparamter configuration in [`configs/train.yaml`](configs/train.yaml), including curriculum of increasingly strong opponent mix
 - TensorBoard metrics for reward and win-rate baselines
 
-## Learning strategy
+## Learnings
 
-A lot of experimentation was done on opponent selection for training to create appropriate learning pressure (because just running the policy against itself could reward the policy for getting a better player, but also for being a worse opponent, making pure self-play learning potentially unstable):
+### Appropriate Opponent pool
 
-- We are using a mix of random opponents with varied policies:
-  - The current policy (pure self-play)
-  - Some previous policy checkpoint
-  - A random policy (mostly used initially to get the training off the ground)
-  - Monte-Carlo Tree Search policy with increasing strength (simulating N games and picking best action)
-  - A simple hardcoded rule-based policy (win if possible, block if needed, then expand or play random)
-- The opponent mix gets increasingly harder over time, configured via timestep phases
-- After every checkpoint we run a league/tournament between the last few checkpoints and pick the best for further training - this was a recommendation from various tutorials but in practice it doesn't look like it helped (we almost always select the latest).
+Getting the general RL algorithm was pretty straightforward, but getting the policy to actually learn well required a lot of tuning and experimentation, in particular in selecting appropriate opponents that would be just the right (increasing) strength to provide a useful learning gradient:
+
+- Self-play alone can be unstable (since the reward can either select a strong player policy, or a weak opponent policy - hence the use of historical checkpoints)
+- Non-self opponents need an appropriate strength:
+  - Random helps for the very first few iterations but is quickly useless
+  - MCTS works well for a while, especially since we can tune adjust its strength (number of simulated games), but also plateaus (100% policy wins) after ~200k timesteps
+  - A more capable policy based on PUCT, an enhancement of MCTS that uses the network's action selection priors to explore the best trajectories
+
+The training is organized in a curriculum, a series of phases with a different mix of opponents of increasing (but appropriate) strength. Getting this curriculum right took a lot of experimentation (watching the eval reward metrics against each opponent class).
+
+### Leagues
+
+The literature often recommends organizing a regular selection of the best model checkpoint, to make sure we always keep improving. This was implemented running a regular league tournament between N recent checkpoints + current model, computing an ELO score for each model after having them all play each other X times...
+
+In practice this didn't really seem to help, since the selected checkpoint almost always seemed to be the latest one, but it was a good metric to track just to make sure we keep learning.
+
+### Hardware
+
+All the training was done on my Macbook. I tried renting GPUs on [Thundercompute](https://thundercompute.com) but it wasn't much faster, most likley because the training involves a lot of rollouts (game simulations) which run on cpu and not on CUDA...
 
 ## CI
 

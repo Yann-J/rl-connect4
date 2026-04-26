@@ -213,6 +213,10 @@ def main() -> None:
         max_checkpoints=cfg_int(self_play_cfg["max_checkpoints"]),
     )
 
+    eval_rng_seed = eval_cfg.get("rng_seed")
+    if eval_rng_seed is not None:
+        eval_rng_seed = cfg_int(eval_rng_seed)
+
     callback = SelfPlayEvalCallback(
         opponent_pool=opponent_pool,
         checkpoint_manager=checkpoint_manager,
@@ -221,6 +225,10 @@ def main() -> None:
         n_eval_episodes=cfg_int(eval_cfg["n_eval_episodes"]),
         mcts_simulations=cfg_int(eval_cfg["mcts_simulations"]),
         eval_puct_simulations=parse_eval_puct_simulations(eval_cfg),
+        eval_random_symmetry=bool(eval_cfg.get("random_symmetry", True)),
+        eval_random_side=bool(eval_cfg.get("random_side", True)),
+        eval_random_episode_seeds=bool(eval_cfg.get("random_episode_seeds", True)),
+        eval_rng_seed=eval_rng_seed,
         train_config_path=config_path,
         curriculum=parse_curriculum(
             self_play_cfg, total_timesteps=cfg_int(train_cfg["total_timesteps"])

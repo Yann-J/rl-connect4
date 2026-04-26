@@ -114,12 +114,13 @@ class PettingZooConnect4GymEnv(gym.Env[np.ndarray, int]):
 
     def reset(self, *, seed: int | None = None, options: dict | None = None):
         super().reset(seed=seed)
-        self._mirror_episode = bool(
-            self.config.symmetry_augmentation and np.random.random() < 0.5
-        )
+        if self.config.symmetry_augmentation:
+            self._mirror_episode = bool(self.np_random.random() < 0.5)
+        else:
+            self._mirror_episode = False
         if self.config.randomize_train_agent:
             self._train_agent = str(
-                np.random.choice(["player_0", "player_1"])
+                self.np_random.choice(np.array(["player_0", "player_1"]))
             )
         else:
             self._train_agent = self.config.train_agent

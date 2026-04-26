@@ -85,6 +85,10 @@ eval:
   n_eval_episodes: 200
   mcts_simulations: 200
   puct_simulations: [8, 16, 32, 64]
+  random_symmetry: true
+  random_side: true
+  random_episode_seeds: true
+  rng_seed: null
 
 league:
   enabled: true

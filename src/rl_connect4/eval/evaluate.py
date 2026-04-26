@@ -1,8 +1,13 @@
 from __future__ import annotations
 
 import numpy as np
+from numpy.random import Generator
 
-from rl_connect4.envs.pettingzoo_connect4 import OpponentPolicy, PettingZooConnect4GymEnv
+from rl_connect4.envs.pettingzoo_connect4 import (
+    Connect4Config,
+    OpponentPolicy,
+    PettingZooConnect4GymEnv,
+)
 
 
 def _predict_masked(model, obs: np.ndarray, action_mask: np.ndarray, deterministic: bool = True) -> int:
@@ -14,16 +19,42 @@ def evaluate_vs_opponent(
     model,
     opponent_policy: OpponentPolicy,
     n_episodes: int,
-    seed: int | None = None,
+    *,
+    random_symmetry: bool = True,
+    random_side: bool = True,
+    random_episode_seeds: bool = True,
+    rng_seed: int | None = None,
+    episode_seed_rng: Generator | None = None,
 ) -> dict[str, float]:
-    env = PettingZooConnect4GymEnv(opponent_policy=opponent_policy)
+    """Run ``n_episodes`` against ``opponent_policy``.
+
+    By default each episode uses fresh gym seeds plus random horizontal mirroring
+    and random first player so aggregate win rates are meaningful.
+
+    Pass ``episode_seed_rng`` to share one stream across several eval batches
+    (e.g. MCTS then PUCT) so episode seeds do not repeat when ``rng_seed`` is fixed.
+    """
+    config = Connect4Config(
+        symmetry_augmentation=random_symmetry,
+        randomize_train_agent=random_side,
+    )
+    env = PettingZooConnect4GymEnv(opponent_policy=opponent_policy, config=config)
     wins = 0
     draws = 0
     losses = 0
     rewards: list[float] = []
 
+    master = (
+        episode_seed_rng
+        if episode_seed_rng is not None
+        else np.random.default_rng(rng_seed)
+    )
     for ep in range(n_episodes):
-        obs, info = env.reset(seed=None if seed is None else seed + ep)
+        if random_episode_seeds:
+            ep_seed = int(master.integers(0, 2**31 - 1))
+        else:
+            ep_seed = None if rng_seed is None else int(rng_seed) + ep
+        obs, info = env.reset(seed=ep_seed)
         done = False
         ep_reward = 0.0
         while not done:

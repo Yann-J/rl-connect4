@@ -38,6 +38,10 @@ class SelfPlayEvalCallback(BaseCallback):
         league_config: LeagueConfig | None = None,
         train_config_path: Path | None = None,
         rolling_window: int = 100,
+        eval_random_symmetry: bool = True,
+        eval_random_side: bool = True,
+        eval_random_episode_seeds: bool = True,
+        eval_rng_seed: int | None = None,
         verbose: int = 0,
     ) -> None:
         super().__init__(verbose=verbose)
@@ -60,6 +64,10 @@ class SelfPlayEvalCallback(BaseCallback):
         self.train_config_path = train_config_path
         self._applied_phase_idx = -1
         self.rolling_rewards = deque(maxlen=rolling_window)
+        self.eval_random_symmetry = eval_random_symmetry
+        self.eval_random_side = eval_random_side
+        self.eval_random_episode_seeds = eval_random_episode_seeds
+        self.eval_rng_seed = eval_rng_seed
 
     def _on_training_start(self) -> None:
         if self.train_config_path is not None:
@@ -71,6 +79,7 @@ class SelfPlayEvalCallback(BaseCallback):
                 )
         self.opponent_pool.set_current_model(self.model)
         self._apply_curriculum_phase(force=True)
+        self._eval_episode_seed_rng = np.random.default_rng(self.eval_rng_seed)
 
     def _apply_curriculum_phase(self, force: bool = False) -> None:
         if not self.curriculum:
@@ -146,6 +155,11 @@ class SelfPlayEvalCallback(BaseCallback):
                 self.model,
                 opponent_policy=make_mcts_policy(self.mcts_simulations),
                 n_episodes=self.n_eval_episodes,
+                random_symmetry=self.eval_random_symmetry,
+                random_side=self.eval_random_side,
+                random_episode_seeds=self.eval_random_episode_seeds,
+                rng_seed=self.eval_rng_seed,
+                episode_seed_rng=self._eval_episode_seed_rng,
             )
             self.logger.record("eval/mcts_win_rate", mcts_metrics["win_rate"])
             self.logger.record(
@@ -166,6 +180,11 @@ class SelfPlayEvalCallback(BaseCallback):
                         c_puct=self.opponent_pool.puct_c_puct,
                     ),
                     n_episodes=self.n_eval_episodes,
+                    random_symmetry=self.eval_random_symmetry,
+                    random_side=self.eval_random_side,
+                    random_episode_seeds=self.eval_random_episode_seeds,
+                    rng_seed=self.eval_rng_seed,
+                    episode_seed_rng=self._eval_episode_seed_rng,
                 )
                 self.logger.record(
                     f"eval/puct/{puct_sims}/win_rate",

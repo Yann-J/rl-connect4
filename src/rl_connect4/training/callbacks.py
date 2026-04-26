@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import shutil
 from collections import deque
 from dataclasses import dataclass
+from pathlib import Path
 
 import numpy as np
 from stable_baselines3.common.callbacks import BaseCallback
@@ -31,8 +33,10 @@ class SelfPlayEvalCallback(BaseCallback):
         checkpoint_freq: int = 10_000,
         n_eval_episodes: int = 50,
         mcts_simulations: int = 100,
+        eval_puct_simulations: list[int] | None = None,
         curriculum: list[CurriculumPhase] | None = None,
         league_config: LeagueConfig | None = None,
+        train_config_path: Path | None = None,
         rolling_window: int = 100,
         verbose: int = 0,
     ) -> None:
@@ -43,15 +47,28 @@ class SelfPlayEvalCallback(BaseCallback):
         self.checkpoint_freq = checkpoint_freq
         self.n_eval_episodes = n_eval_episodes
         self.mcts_simulations = mcts_simulations
+        self.eval_puct_simulations = (
+            list(eval_puct_simulations)
+            if eval_puct_simulations is not None
+            else []
+        )
         self.curriculum = sorted(
             curriculum or [],
             key=lambda phase: phase.start_timestep,
         )
         self.league_config = league_config
+        self.train_config_path = train_config_path
         self._applied_phase_idx = -1
         self.rolling_rewards = deque(maxlen=rolling_window)
 
     def _on_training_start(self) -> None:
+        if self.train_config_path is not None:
+            log_dir = self.model.logger.get_dir()
+            if log_dir:
+                shutil.copy2(
+                    self.train_config_path,
+                    Path(log_dir) / "train_config.yaml",
+                )
         self.opponent_pool.set_current_model(self.model)
         self._apply_curriculum_phase(force=True)
 
@@ -130,25 +147,34 @@ class SelfPlayEvalCallback(BaseCallback):
                 opponent_policy=make_mcts_policy(self.mcts_simulations),
                 n_episodes=self.n_eval_episodes,
             )
-            puct_metrics = evaluate_vs_opponent(
-                self.model,
-                opponent_policy=make_puct_policy(
-                    self.model,
-                    simulations=self.opponent_pool.puct_simulations,
-                    c_puct=self.opponent_pool.puct_c_puct,
-                ),
-                n_episodes=self.n_eval_episodes,
-            )
             self.logger.record("eval/mcts_win_rate", mcts_metrics["win_rate"])
-            self.logger.record("eval/puct_win_rate", puct_metrics["win_rate"])
             self.logger.record(
                 "eval/mcts_mean_reward",
                 mcts_metrics["mean_reward"],
             )
-            self.logger.record(
-                "eval/puct_mean_reward",
-                puct_metrics["mean_reward"],
+            puct_budgets = (
+                self.eval_puct_simulations
+                if self.eval_puct_simulations
+                else [self.opponent_pool.puct_simulations]
             )
+            for puct_sims in puct_budgets:
+                puct_metrics = evaluate_vs_opponent(
+                    self.model,
+                    opponent_policy=make_puct_policy(
+                        self.model,
+                        simulations=puct_sims,
+                        c_puct=self.opponent_pool.puct_c_puct,
+                    ),
+                    n_episodes=self.n_eval_episodes,
+                )
+                self.logger.record(
+                    f"eval/puct/{puct_sims}/win_rate",
+                    puct_metrics["win_rate"],
+                )
+                self.logger.record(
+                    f"eval/puct/{puct_sims}/mean_reward",
+                    puct_metrics["mean_reward"],
+                )
 
             if self.rolling_rewards:
                 win_rate = float(np.mean(np.array(self.rolling_rewards) > 0))

@@ -12,6 +12,7 @@ src/rl_connect4/eval/__init__.py
 src/rl_connect4/eval/evaluate.py
 src/rl_connect4/mcts/__init__.py
 src/rl_connect4/mcts/mcts.py
+src/rl_connect4/mcts/puct.py
 src/rl_connect4/policies/__init__.py
 src/rl_connect4/policies/cnn_policy.py
 src/rl_connect4/policies/rule_based.py

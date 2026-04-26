@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import argparse
 import re
-import shutil
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 import yaml
@@ -63,6 +63,26 @@ def cfg_int(value: int | float | str) -> int:
     return int(parsed)
 
 
+def parse_eval_puct_simulations(eval_cfg: dict) -> list[int]:
+    """Parse eval.puct_simulations as one int or a list; dedupe while preserving order."""
+    raw = eval_cfg.get("puct_simulations")
+    if raw is None:
+        raise KeyError("eval.puct_simulations is required")
+    if isinstance(raw, list):
+        values = [cfg_int(x) for x in raw]
+    else:
+        values = [cfg_int(raw)]
+    if not values:
+        raise ValueError("eval.puct_simulations must be non-empty")
+    seen: set[int] = set()
+    out: list[int] = []
+    for n in values:
+        if n not in seen:
+            seen.add(n)
+            out.append(n)
+    return out
+
+
 def load_config(path: str | Path) -> dict:
     with open(path, "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
@@ -88,9 +108,7 @@ def parse_curriculum(
     self_play_cfg: dict, total_timesteps: int
 ) -> list[CurriculumPhase]:
     phases = self_play_cfg.get("phases", [])
-    default_puct_simulations = cfg_int(
-        self_play_cfg.get("puct_simulations", 128)
-    )
+    default_puct_simulations = cfg_int(self_play_cfg.get("puct_simulations", 128))
     parsed: list[CurriculumPhase] = []
     for phase in phases:
         mix_cfg = phase["mix"]
@@ -136,7 +154,9 @@ def main() -> None:
 
     config_path = Path(args.config).resolve()
     cfg = load_config(config_path)
-    run_name = cfg["run_name"]
+    base_run_name = cfg["run_name"]
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    run_name = f"{base_run_name}_{stamp}"
     train_cfg = cfg["train"]
     eval_cfg = cfg["eval"]
     self_play_cfg = cfg["self_play"]
@@ -144,10 +164,6 @@ def main() -> None:
     league_cfg = cfg.get("league", {})
     league_enabled = bool(league_cfg.get("enabled", True))
     n_envs = cfg_int(train_cfg.get("num_envs", 1))
-
-    run_dir = Path("runs") / run_name
-    run_dir.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(config_path, run_dir / "train_config.yaml")
 
     opponent_pool = OpponentPool(
         OpponentMix(
@@ -204,6 +220,8 @@ def main() -> None:
         checkpoint_freq=cfg_int(self_play_cfg["checkpoint_freq"]),
         n_eval_episodes=cfg_int(eval_cfg["n_eval_episodes"]),
         mcts_simulations=cfg_int(eval_cfg["mcts_simulations"]),
+        eval_puct_simulations=parse_eval_puct_simulations(eval_cfg),
+        train_config_path=config_path,
         curriculum=parse_curriculum(
             self_play_cfg, total_timesteps=cfg_int(train_cfg["total_timesteps"])
         ),

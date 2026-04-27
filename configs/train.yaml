@@ -1,4 +1,4 @@
-run_name: "connect4_maskableppo_puct_league"
+run_name: "connect4_maskableppo_puct_league_speed"
 
 env:
   symmetry_augmentation: true
@@ -34,52 +34,52 @@ self_play:
       mcts_simulations: 50
       puct_simulations: 8
       mix:
-        current: 0.5
-        historical: 0.2
-        random: 0.1
-        mcts: 0.1
-        puct: 0.1
-        rule_based: 0
+        current: 0.15
+        historical: 0.1
+        random: 0.05
+        mcts: 0.15
+        puct: 0.05
+        rule_based: 0.5
     - start_percent: 5
       mcts_simulations: 100
       puct_simulations: 16
       mix:
-        current: 0.35
-        historical: 0.35
+        current: 0.25
+        historical: 0.25
         random: 0
         mcts: 0.2
         puct: 0.1
-        rule_based: 0
+        rule_based: 0.2
     - start_percent: 10
       mcts_simulations: 200
       puct_simulations: 24
       mix:
         current: 0.3
-        historical: 0.3
+        historical: 0.25
         random: 0
         mcts: 0.3
         puct: 0.1
-        rule_based: 0
+        rule_based: 0.05
     - start_percent: 15
       mcts_simulations: 200
       puct_simulations: 32
       mix:
-        current: 0.3
+        current: 0.25
         historical: 0.2
         random: 0
         mcts: 0.4
         puct: 0.1
-        rule_based: 0
+        rule_based: 0.05
     - start_percent: 20
       mcts_simulations: 200
       puct_simulations: 48
       mix:
-        current: 0.3
+        current: 0.25
         historical: 0.2
         random: 0
         mcts: 0.1
         puct: 0.4
-        rule_based: 0
+        rule_based: 0.05
 
 eval:
   eval_freq: 5000

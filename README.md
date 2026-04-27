@@ -35,7 +35,7 @@ This was developed from scratch but heavily inspired from the following referenc
 - All hyperparamter configuration in [`configs/train.yaml`](configs/train.yaml), including curriculum of increasingly strong opponent mix
 - TensorBoard metrics for reward and win-rate baselines
 
-## Learnings
+## Learnings (for me!)
 
 ### Appropriate Opponent pool
 
@@ -51,9 +51,15 @@ The training is organized in a curriculum, a series of phases with a different m
 
 ### Leagues
 
-The literature often recommends organizing a regular selection of the best model checkpoint, to make sure we always keep improving. This was implemented running a regular league tournament between N recent checkpoints + current model, computing an ELO score for each model after having them all play each other X times...
+The literature often recommends running a regular selection among the recent model checkpoints to select the best, to make sure we always keep improving. This was implemented by running a regular league tournament between N recent checkpoints + current model, computing an ELO-style score for each model after having them all play each other X times...
 
 In practice this didn't really seem to help, since the selected checkpoint almost always seemed to be the latest one, but it was a good metric to track just to make sure we keep learning.
+
+### Rewards
+
+I originally used a trivial terminal reward (+1 for wins, -1 for losses, 0 for draws). This worked fine up to a certain point, allowing the agent to easily beat MCTS fairly quickly, but I was then stuck in a limbo where MCTS opponents were too easy (always getting +1 reward), but PUCT were too strong (always getting -1). I felt this was not providing a good enough gradient to learn, and implemented a terminal bonus based on the speed of the wins/losses, equivalent to the ratio of empty cells on the board (therefore always between 0 and 1), to reward fast wins slightly more, and penalize fast losses slightly more. I thought this would allow to learn even from slightly better losses against a strong opponent.
+
+This seemed to help, but not as much as I thought.
 
 ### Hardware
 

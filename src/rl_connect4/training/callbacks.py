@@ -11,6 +11,7 @@ from stable_baselines3.common.callbacks import BaseCallback
 from rl_connect4.eval.evaluate import evaluate_vs_opponent
 from rl_connect4.mcts.mcts import make_mcts_policy
 from rl_connect4.mcts.puct import make_puct_policy
+from rl_connect4.policies.rule_based import rule_based_policy
 from rl_connect4.training.checkpoints import CheckpointManager
 from rl_connect4.training.league import LeagueConfig, run_checkpoint_league
 from rl_connect4.training.opponent_pool import OpponentMix, OpponentPool
@@ -170,6 +171,25 @@ class SelfPlayEvalCallback(BaseCallback):
             self.logger.record(
                 "eval/mcts_mean_reward",
                 mcts_metrics["mean_reward"],
+            )
+            rule_based_metrics = evaluate_vs_opponent(
+                self.model,
+                opponent_policy=rule_based_policy,
+                n_episodes=self.n_eval_episodes,
+                random_symmetry=self.eval_random_symmetry,
+                random_side=self.eval_random_side,
+                random_episode_seeds=self.eval_random_episode_seeds,
+                rng_seed=self.eval_rng_seed,
+                episode_seed_rng=self._eval_episode_seed_rng,
+                empty_cell_ratio_terminal_reward=self.eval_empty_cell_ratio_terminal_reward,
+            )
+            self.logger.record(
+                "eval/rule_based_win_rate",
+                rule_based_metrics["win_rate"],
+            )
+            self.logger.record(
+                "eval/rule_based_mean_reward",
+                rule_based_metrics["mean_reward"],
             )
             puct_budgets = (
                 self.eval_puct_simulations

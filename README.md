@@ -39,11 +39,13 @@ This was developed from scratch but heavily inspired from the following referenc
 
 ### Appropriate Opponent pool
 
-Getting the general RL algorithm was pretty straightforward, but getting the policy to actually learn well required a lot of tuning and experimentation, in particular in selecting appropriate opponents that would be just the right (increasing) strength to provide a useful learning gradient:
+Getting the general RL algorithm was pretty straightforward, but getting the policy to actually learn well required a lot of tuning and experimentation, in particular in selecting appropriate opponents that would be just the right (increasing) strength to provide a useful learning gradient.
 
-- Self-play alone can be unstable (since the reward can either select a strong player policy, or a weak opponent policy - hence the use of historical checkpoints)
-- Non-self opponents need an appropriate strength:
-  - Random helps for the very first few iterations but is quickly useless
+Self-play alone can be unstable (since the reward can either select a strong player policy, or a weak opponent policy - hence the use of historical checkpoints), and risks overfitting to a single play style, so we're playing against an opponent pool with a configurable mix:
+
+- Self-play (both current model and recent checkpoints)
+- Non-self opponents with an appropriate strength:
+  - Random player helps for the very first few iterations but is quickly useless
   - MCTS works well for a while, especially since we can tune adjust its strength (number of simulated games), but also plateaus (100% policy wins) after ~200k timesteps
   - A more capable policy based on PUCT, an enhancement of MCTS that uses the network's action selection priors to explore the best trajectories
 

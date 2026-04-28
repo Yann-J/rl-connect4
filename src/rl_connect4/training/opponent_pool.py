@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol
+from typing import Any, Protocol
 
 import numpy as np
 from sb3_contrib import MaskablePPO
@@ -25,6 +25,59 @@ class PredictModel(Protocol):
         deterministic=False,
         **kwargs,
     ): ...
+
+
+class OnnxPolicyModel:
+    def __init__(self, checkpoint_path: Path):
+        try:
+            import onnxruntime as ort
+        except ImportError as exc:
+            raise ImportError(
+                "ONNX checkpoints require onnxruntime. Install it with "
+                "`uv add onnxruntime` (or pip install onnxruntime)."
+            ) from exc
+
+        self._session = ort.InferenceSession(str(checkpoint_path))
+        self._input_names = {inp.name for inp in self._session.get_inputs()}
+        if (
+            "obs" not in self._input_names
+            or "action_masks" not in self._input_names
+        ):
+            raise ValueError(
+                f"Unsupported ONNX model inputs for {checkpoint_path}. "
+                "Expected inputs named 'obs' and 'action_masks'."
+            )
+
+    def predict(
+        self,
+        observation: np.ndarray,
+        state: Any = None,
+        episode_start: Any = None,
+        deterministic: bool = False,
+        **kwargs: Any,
+    ) -> tuple[np.ndarray, None]:
+        del state, episode_start, deterministic  # Unused; kept for SB3 compat.
+        action_masks = kwargs.get("action_masks")
+        if action_masks is None:
+            raise ValueError("ONNX policy predict requires `action_masks`.")
+        obs = np.asarray(observation, dtype=np.float32)
+        if obs.ndim == 3:
+            obs = np.expand_dims(obs, axis=0)
+        mask = np.asarray(action_masks, dtype=bool)
+        if mask.ndim == 1:
+            mask = np.expand_dims(mask, axis=0)
+        logits = self._session.run(
+            ["logits"], {"obs": obs, "action_masks": mask}
+        )[0]
+        action = np.argmax(logits, axis=-1).astype(np.int64)
+        return action, None
+
+
+def load_policy_model(checkpoint_path: str | Path) -> PredictModel:
+    path = Path(checkpoint_path)
+    if path.suffix.lower() == ".onnx":
+        return OnnxPolicyModel(path)
+    return MaskablePPO.load(str(path))
 
 
 def _masked_predict(
@@ -59,7 +112,7 @@ def make_model_policy(
 def make_checkpoint_policy(
     checkpoint_path: str | Path, *, deterministic: bool = True
 ) -> OpponentPolicy:
-    model = MaskablePPO.load(str(checkpoint_path))
+    model = load_policy_model(checkpoint_path)
 
     def _policy(obs: np.ndarray, action_mask: np.ndarray) -> int:
         return _masked_predict(

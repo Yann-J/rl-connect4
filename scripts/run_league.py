@@ -43,9 +43,10 @@ def _collect_checkpoints(
             raise NotADirectoryError(
                 f"Checkpoint directory not found: {raw_dir}"
             )
-        collected.extend(
-            sorted(directory.glob("*.zip"), key=_checkpoint_sort_key)
-        )
+        for pattern in ("*.zip", "*.onnx"):
+            collected.extend(
+                sorted(directory.glob(pattern), key=_checkpoint_sort_key)
+            )
 
     # Keep insertion order while deduplicating.
     deduped = list(dict.fromkeys(collected))
@@ -63,7 +64,7 @@ def _build_parser() -> argparse.ArgumentParser:
         action="append",
         default=[],
         help=(
-            "Path to a model checkpoint (.zip). "
+            "Path to a model checkpoint (.zip or .onnx). "
             "Repeat for multiple candidates."
         ),
     )
@@ -72,7 +73,7 @@ def _build_parser() -> argparse.ArgumentParser:
         action="append",
         default=[],
         help=(
-            "Directory containing checkpoint .zip files. "
+            "Directory containing checkpoint .zip/.onnx files. "
             "All files are added as candidates."
         ),
     )

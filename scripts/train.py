@@ -198,11 +198,24 @@ def main() -> None:
             "vf": [256, 128],
         },
     }
+
+    ent_coef = cfg_float(train_cfg.get("ent_coef", 0.01))
+    # SB3 supports learning-rate schedules via a callable taking
+    # `progress_remaining` (1 -> 0).
+    initial_lr = cfg_float(train_cfg["learning_rate"])
+
+    def lr_schedule(progress_remaining: float) -> float:
+        return initial_lr * float(progress_remaining)
+
+    requested_n_steps = cfg_int(train_cfg["n_steps"])
+    # Smaller rollouts tend to adapt faster when the opponent curriculum changes.
+    n_steps = min(requested_n_steps, 1024)
     model = MaskablePPO(
         policy="CnnPolicy",
         env=env,
-        learning_rate=cfg_float(train_cfg["learning_rate"]),
-        n_steps=cfg_int(train_cfg["n_steps"]),
+        learning_rate=lr_schedule,
+        ent_coef=ent_coef,
+        n_steps=n_steps,
         batch_size=cfg_int(train_cfg["batch_size"]),
         gamma=cfg_float(train_cfg["gamma"]),
         policy_kwargs=policy_kwargs,
@@ -247,6 +260,13 @@ def main() -> None:
                 max_policies=cfg_int(league_cfg.get("max_policies", 10)),
                 initial_elo=cfg_float(league_cfg.get("initial_elo", 1000.0)),
                 k_factor=cfg_float(league_cfg.get("k_factor", 24.0)),
+                symmetry_augmentation=bool(
+                    eval_cfg.get("random_symmetry", True)
+                ),
+                randomize_train_agent=bool(
+                    eval_cfg.get("random_side", True)
+                ),
+                empty_cell_ratio_terminal_reward=empty_cell_ratio_terminal_reward,
             )
             if league_enabled
             else None

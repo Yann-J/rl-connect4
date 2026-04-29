@@ -73,6 +73,10 @@ class SelfPlayEvalCallback(BaseCallback):
         self.eval_empty_cell_ratio_terminal_reward = (
             eval_empty_cell_ratio_terminal_reward
         )
+        # Use env-timestep semantics (self.num_timesteps) rather than modulo on
+        # callback call counts (self.n_calls), which are affected by num_envs.
+        self._next_checkpoint_ts: int | None = None
+        self._next_eval_ts: int | None = None
 
     def _on_training_start(self) -> None:
         if self.train_config_path is not None:
@@ -85,6 +89,10 @@ class SelfPlayEvalCallback(BaseCallback):
         self.opponent_pool.set_current_model(self.model)
         self._apply_curriculum_phase(force=True)
         self._eval_episode_seed_rng = np.random.default_rng(self.eval_rng_seed)
+        self._next_checkpoint_ts = (
+            int(self.num_timesteps) + self.checkpoint_freq
+        )
+        self._next_eval_ts = int(self.num_timesteps) + self.eval_freq
 
     def _apply_curriculum_phase(self, force: bool = False) -> None:
         if not self.curriculum:
@@ -123,7 +131,10 @@ class SelfPlayEvalCallback(BaseCallback):
                 if bool(done):
                     self.rolling_rewards.append(float(reward))
 
-        if self.n_calls % self.checkpoint_freq == 0:
+        while (
+            self._next_checkpoint_ts is not None
+            and self.num_timesteps >= self._next_checkpoint_ts
+        ):
             new_checkpoint = self.checkpoint_manager.save(
                 self.model,
                 self.num_timesteps,
@@ -155,7 +166,12 @@ class SelfPlayEvalCallback(BaseCallback):
                         float(best_path.stem.split("_")[-1]),
                     )
 
-        if self.n_calls % self.eval_freq == 0:
+            self._next_checkpoint_ts += self.checkpoint_freq
+
+        while (
+            self._next_eval_ts is not None
+            and self.num_timesteps >= self._next_eval_ts
+        ):
             mcts_metrics = evaluate_vs_opponent(
                 self.model,
                 opponent_policy=make_mcts_policy(self.mcts_simulations),
@@ -165,7 +181,9 @@ class SelfPlayEvalCallback(BaseCallback):
                 random_episode_seeds=self.eval_random_episode_seeds,
                 rng_seed=self.eval_rng_seed,
                 episode_seed_rng=self._eval_episode_seed_rng,
-                empty_cell_ratio_terminal_reward=self.eval_empty_cell_ratio_terminal_reward,
+                empty_cell_ratio_terminal_reward=(
+                    self.eval_empty_cell_ratio_terminal_reward
+                ),
             )
             self.logger.record("eval/mcts_win_rate", mcts_metrics["win_rate"])
             self.logger.record(
@@ -181,7 +199,9 @@ class SelfPlayEvalCallback(BaseCallback):
                 random_episode_seeds=self.eval_random_episode_seeds,
                 rng_seed=self.eval_rng_seed,
                 episode_seed_rng=self._eval_episode_seed_rng,
-                empty_cell_ratio_terminal_reward=self.eval_empty_cell_ratio_terminal_reward,
+                empty_cell_ratio_terminal_reward=(
+                    self.eval_empty_cell_ratio_terminal_reward
+                ),
             )
             self.logger.record(
                 "eval/rule_based_win_rate",
@@ -210,7 +230,9 @@ class SelfPlayEvalCallback(BaseCallback):
                     random_episode_seeds=self.eval_random_episode_seeds,
                     rng_seed=self.eval_rng_seed,
                     episode_seed_rng=self._eval_episode_seed_rng,
-                    empty_cell_ratio_terminal_reward=self.eval_empty_cell_ratio_terminal_reward,
+                    empty_cell_ratio_terminal_reward=(
+                        self.eval_empty_cell_ratio_terminal_reward
+                    ),
                 )
                 self.logger.record(
                     f"eval/puct/{puct_sims}/win_rate",
@@ -220,6 +242,8 @@ class SelfPlayEvalCallback(BaseCallback):
                     f"eval/puct/{puct_sims}/mean_reward",
                     puct_metrics["mean_reward"],
                 )
+
+            self._next_eval_ts += self.eval_freq
 
             if self.rolling_rewards:
                 win_rate = float(np.mean(np.array(self.rolling_rewards) > 0))

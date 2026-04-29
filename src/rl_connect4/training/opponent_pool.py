@@ -163,6 +163,7 @@ class OpponentPool:
         )
         self._puct_simulations = int(puct_simulations)
         self._puct_c_puct = float(puct_c_puct)
+        self._current_model: PredictModel | None = None
         self._puct_policy: OpponentPolicy | None = None
         self._current_policy: OpponentPolicy | None = None
         self._historical_policies: list[OpponentPolicy] = []
@@ -172,6 +173,7 @@ class OpponentPool:
         self._elite_policy: OpponentPolicy | None = None
 
     def set_current_model(self, model: PredictModel) -> None:
+        self._current_model = model
         self._current_policy = make_model_policy(model, deterministic=True)
         self._puct_policy = make_puct_policy(
             model,
@@ -228,7 +230,17 @@ class OpponentPool:
             self._puct_simulations = int(simulations)
         if c_puct is not None:
             self._puct_c_puct = float(c_puct)
-        self._puct_policy = None
+        # Rebuild the PUCT opponent if we already have a model.
+        # This prevents silent "fall through" to random_legal_policy when
+        # curriculum updates change PUCT params.
+        if self._current_model is not None:
+            self._puct_policy = make_puct_policy(
+                self._current_model,
+                simulations=self._puct_simulations,
+                c_puct=self._puct_c_puct,
+            )
+        else:
+            self._puct_policy = None
 
     @property
     def puct_simulations(self) -> int:

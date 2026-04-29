@@ -7,6 +7,7 @@ from pathlib import Path
 import numpy as np
 
 from rl_connect4.envs.pettingzoo_connect4 import PettingZooConnect4GymEnv
+from rl_connect4.envs.pettingzoo_connect4 import Connect4Config
 from rl_connect4.training.opponent_pool import (
     load_policy_model,
     make_checkpoint_policy,
@@ -19,6 +20,10 @@ class LeagueConfig:
     max_policies: int = 10
     initial_elo: float = 1000.0
     k_factor: float = 24.0
+    # Match the training/eval game protocol so elite selection is consistent.
+    symmetry_augmentation: bool = False
+    randomize_train_agent: bool = False
+    empty_cell_ratio_terminal_reward: bool = False
 
 
 def _predict_masked(model, obs: np.ndarray, action_mask: np.ndarray) -> int:
@@ -31,9 +36,17 @@ def _predict_masked(model, obs: np.ndarray, action_mask: np.ndarray) -> int:
 
 
 def _play_model_vs_policy(
-    model, opponent_policy, n_games: int, *, seed_offset: int = 0
+    model,
+    opponent_policy,
+    n_games: int,
+    *,
+    seed_offset: int = 0,
+    connect4_config: Connect4Config,
 ) -> float:
-    env = PettingZooConnect4GymEnv(opponent_policy=opponent_policy)
+    env = PettingZooConnect4GymEnv(
+        opponent_policy=opponent_policy,
+        config=connect4_config,
+    )
     score = 0.0
     for ep in range(n_games):
         obs, info = env.reset(seed=seed_offset + ep)
@@ -58,6 +71,8 @@ def _pair_score(
     model_b,
     policy_b,
     n_games_per_pair: int,
+    *,
+    connect4_config: Connect4Config,
 ) -> float:
     """Return score for A in [0, 1], with both seating directions balanced."""
     games_a_as_train = (n_games_per_pair + 1) // 2
@@ -71,6 +86,7 @@ def _pair_score(
             policy_b,
             n_games=games_a_as_train,
             seed_offset=0,
+            connect4_config=connect4_config,
         )
         wins_a += score_a_forward * games_a_as_train
     if games_b_as_train > 0:
@@ -80,6 +96,7 @@ def _pair_score(
             policy_a,
             n_games=games_b_as_train,
             seed_offset=games_a_as_train,
+            connect4_config=connect4_config,
         )
         wins_a += (1.0 - score_b_forward) * games_b_as_train
     return wins_a / n_games_per_pair
@@ -93,6 +110,13 @@ def run_checkpoint_league(
     checkpoint_paths: list[Path],
     config: LeagueConfig,
 ) -> dict[Path, float]:
+    connect4_config = Connect4Config(
+        symmetry_augmentation=config.symmetry_augmentation,
+        randomize_train_agent=config.randomize_train_agent,
+        empty_cell_ratio_terminal_reward=(
+            config.empty_cell_ratio_terminal_reward
+        ),
+    )
     pool = checkpoint_paths[-config.max_policies:]
     if not pool:
         return {}
@@ -108,6 +132,7 @@ def run_checkpoint_league(
             loaded_models[path_b],
             loaded_policies[path_b],
             n_games_per_pair=config.n_games_per_pair,
+            connect4_config=connect4_config,
         )
         expected_a = _expected_score(elos[path_a], elos[path_b])
         delta = config.k_factor * (score_a - expected_a)
